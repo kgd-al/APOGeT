@@ -1,0 +1,63 @@
+cmake_minimum_required(VERSION 2.8)
+
+####################################################################################################
+## General settings
+####################################################################################################
+
+project("apt")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic")#"-ftime-report")
+
+if (${CMAKE_VERSION} VERSION_LESS 3.1)
+    set(CMAKE_CXX_FLAGS "-std=c++17 ${CMAKE_CXX_FLAGS}")
+else ()
+    set(CMAKE_CXX_STANDARD 17)
+endif ()
+
+set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+
+####################################################################################################
+## Static libraries
+####################################################################################################
+
+add_library(apt-lib STATIC
+    "src/core/crossover.hpp"
+    "src/core/phylogenictree.hpp"
+    "src/core/ptreeconfig.h"
+    "src/core/ptreeconfig.cpp"
+)
+
+####################################################################################################
+## GUI management
+####################################################################################################
+if (NOT CLUSTER_BUILD)
+
+    ################################################################################################
+    ## Qt library
+    ################################################################################################
+
+    #set(CMAKE_PREFIX_PATH $(find $HOME/Qt* -path "*/lib/cmake"))
+
+    find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui)
+    message(STATUS "Qt found at " ${Qt5_DIR})
+    set(QT_LIBS Qt5::Core Qt5::Widgets)
+
+    ################################################################################################
+    ## GUI sources files
+    ################################################################################################
+
+    add_library(apt-gui STATIC
+        "src/core/crossover.hpp"
+        "src/core/phylogenictree.hpp"
+        "src/visu/phylogenyviewer.h"
+        "src/visu/phylogenyviewer.cpp"
+        "src/visu/graphicsviewzoom.h"
+        "src/visu/graphicsviewzoom.cpp"
+        "src/visu/graphicutils.h"
+        "src/visu/graphicutils.cpp"
+        "src/visu/standaloneviewer.hpp"
+    )
+    target_link_libraries(apt-gui apt-lib ${QT_LIBS})
+    set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
+    set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+endif()
