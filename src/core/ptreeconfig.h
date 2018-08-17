@@ -1,7 +1,7 @@
 #ifndef _P_TREE_CONFIG_H_
 #define _P_TREE_CONFIG_H_
 
-#include "../tools/settings/configfile.h"
+#include "settings/configfile.h"
 
 #define CFILE PTreeConfig
 struct CFILE : public ConfigFile<CFILE> {
