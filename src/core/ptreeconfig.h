@@ -1,7 +1,7 @@
 #ifndef _P_TREE_CONFIG_H_
 #define _P_TREE_CONFIG_H_
 
-#include "settings/configfile.h"
+#include "kgd/settings/configfile.h"
 
 #define CFILE PTreeConfig
 struct CFILE : public ConfigFile<CFILE> {

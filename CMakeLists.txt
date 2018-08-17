@@ -19,11 +19,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 ## Self dependancies
 ####################################################################################################
 
-set(CMAKE_PREFIX_PATH "../packages/")
 find_package(tools REQUIRED)
-message(STATUS "Tools found at " ${tools_DIR})
-message(STATUS "Tools includes at " ${tools_INCLUDE_DIRS})
-message(STATUS "Tools libs are " ${tools_LIBRARIES})
 include_directories(${tools_INCLUDE_DIRS})
 
 ####################################################################################################
@@ -71,7 +67,8 @@ if (NOT CLUSTER_BUILD)
     target_link_libraries(apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
-    set(GUI_LIB "$<TARGET_FILE:apt-gui>")
+    set(MAYBE_GUI "apt-gui")
+    set(GUI_LIB "$<TARGET_FILE_NAME:apt-gui>")
 
 endif()
 
@@ -91,7 +88,19 @@ endif()
 ## Package info generation
 ####################################################################################################
 
-set(CONFIG "${PROJECT_SOURCE_DIR}/../packages/${PROJECT_NAME}-config.cmake")
+install(TARGETS apt-core ${MAYBE_GUI} ARCHIVE DESTINATION lib/kgd/apt)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/"
+        DESTINATION include/kgd/apt
+        FILES_MATCHING
+            PATTERN "*.h"
+            PATTERN "*.hpp"
+        PERMISSIONS
+            OWNER_EXECUTE OWNER_READ
+            GROUP_EXECUTE GROUP_READ
+)
+
+set(CONFIG "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake")
 file(GENERATE
     OUTPUT ${CONFIG}
     CONTENT
@@ -99,8 +108,10 @@ file(GENERATE
 
 set(${PROJECT_NAME}_INCLUDE_DIRS
     ${tools_INCLUDE_DIRS}
-    ${PROJECT_SOURCE_DIR}/src)
+    ${CMAKE_INSTALL_PREFIX}/include)
 
 set(${PROJECT_NAME}_LIBRARIES
-    $<JOIN:${tools_LIBRARIES};$<TARGET_FILE:apt-core>;${GUI_LIB},\n    >)\n"
+    $<JOIN:${tools_LIBRARIES};$<TARGET_FILE_NAME:apt-core>;${GUI_LIB},
+    ${CMAKE_INSTALL_PREFIX}/lib/kgd/apt/>)\n"
 )
+install(FILES ${CONFIG} DESTINATION cmake)

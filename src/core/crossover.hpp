@@ -5,6 +5,8 @@
 #include <functional>
 #include <atomic>
 
+#include "kgd/external/json.hpp"
+
 template <typename GENOME, typename CONFIG>
 struct BailOutCrossover {
   using Alignment = typename GENOME::Alignment;
@@ -123,7 +125,7 @@ struct BailOutCrossover {
           && lhs.generation == rhs.generation;
     }
 
-    friend void to_json (json &j, const Data &d) {
+    friend void to_json (nlohmann::json &j, const Data &d) {
       j["distance"] = d.optimalDistance;
       j["inbreed"] = d.inbreedTolerance;
       j["outbreed"] = d.outbreedTolerance;
@@ -135,7 +137,7 @@ struct BailOutCrossover {
       j["gen"] = d.generation;
     }
 
-    friend void from_json (const json &j, Data &d) {
+    friend void from_json (const nlohmann::json &j, Data &d) {
       d.optimalDistance = j["distance"];
       d.inbreedTolerance = j["inbreed"];
       d.outbreedTolerance = j["outbreed"];

@@ -10,7 +10,7 @@
 #include <iostream>
 
 #include "ptreeconfig.h"
-#include "external/json.hpp"
+#include "kgd/external/json.hpp"
 
 namespace genotype {
 
