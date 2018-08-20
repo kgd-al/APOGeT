@@ -9,10 +9,10 @@
 
 #include "crossconfig.h"
 
-template <typename GENOME>
-struct BailOutCrossover {
-  using Alignment = typename GENOME::Alignment;
+namespace genotype {
 
+template <typename GENOME, typename Alignment = typename GENOME::Alignment>
+struct BailOutCrossover {
   class Data {
     double gaussoid (double x, double mu, double sigma) {
       return exp(-((x-mu)*(x-mu)/(2.*sigma*sigma)));
@@ -187,7 +187,9 @@ struct BailOutCrossover {
   }
 };
 
-template <typename G>
-std::atomic<typename BailOutCrossover<G>::Data::ID> BailOutCrossover<G>::Data::NEXT_ID (0);
+template <typename G, typename A>
+std::atomic<typename BailOutCrossover<G, A>::Data::ID> BailOutCrossover<G, A>::Data::NEXT_ID (0);
+
+} // end of namespace genotype
 
 #endif // _CROSSOVER_HPP_

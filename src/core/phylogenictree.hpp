@@ -14,6 +14,7 @@
 
 namespace phylogeny {
 
+template <typename _GENOME> class PTreeIntrospecter;
 static constexpr int D_PTREE = 0;
 
 template <typename GENOME>
@@ -94,7 +95,6 @@ public:
   }
 
 protected:
-  template <typename _GENOME> class PTreeIntrospecter;
   friend class PTreeIntrospecter<GENOME>;
 
   NodeID _nextNodeID;

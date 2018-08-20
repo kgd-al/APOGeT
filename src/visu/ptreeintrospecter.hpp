@@ -12,9 +12,9 @@
 
 namespace phylogeny {
 
-template <typename G>
+template <typename GENOME>
 struct PTreeIntrospecter {
-  using PT = PhylogenicTree<G>;
+  using PT = PhylogenicTree<GENOME>;
   using PN = typename PT::Node;
 
   struct Node : public QGraphicsItem {

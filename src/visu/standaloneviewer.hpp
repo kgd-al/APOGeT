@@ -2,13 +2,19 @@
 #include <QMainWindow>
 
 #include "kgd/external/cxxopts.hpp"
+#include "kgd/external/json.hpp"
 #include "kgd/utils/utils.h"
 
 #include "kgd/settings/configfile.h"
 
-template <typename GENOME>
+#include "phylogenyviewer.h"
+
+template <typename GENOME, typename CONFIG>
 int run(int argc, char *argv[]) {
-  cxxopts::Options options("P-Tree viewer", "Loads and displays a phenotypic tree for \""
+  using PTree = phylogeny::PhylogenicTree<GENOME>;
+  using PViewer = gui::PhylogenyViewer<GENOME>;
+
+  cxxopts::Options options("PTreeViewer", "Loads and displays a phenotypic tree for \""
                            + utils::className<GENOME>() + "\" genomes");
   options.add_options()
     ("h,help", "Display help")
@@ -19,7 +25,7 @@ int run(int argc, char *argv[]) {
     ("showNames", "Whether or not to show node names", cxxopts::value<bool>())
     ("circular", "Whether or not to render a circular p-tree", cxxopts::value<bool>())
     ("p,print", "Render p-tree into 'filename'", cxxopts::value<std::string>())
-    ("t,tree", "File containing the phenotypic tree", cxxopts::value<std::string>())
+    ("t,tree", "File containing the phenotypic tree [MANDATORY]", cxxopts::value<std::string>())
     ;
 
   auto result = options.parse(argc, argv);
@@ -31,7 +37,7 @@ int run(int argc, char *argv[]) {
   }
 
   if (result.count("tree") != 1) {
-    std::cerr << "Wrong number of arguments" << std::endl;
+    std::cerr << "Missing mandatory argument 'tree'" << std::endl;
     return 1;
   }
 
@@ -41,9 +47,9 @@ int run(int argc, char *argv[]) {
   Verbosity verbosity = Verbosity::SHOW;
   if (result.count("verbosity")) verbosity = result["verbosity"].as<Verbosity>();
 
-  SimuConfig::setupConfig(configFile, verbosity);
+  CONFIG::setupConfig(configFile, verbosity);
 
-  auto config = gui::PhylogenyViewer::defaultConfig();
+  auto config = PViewer::defaultConfig();
 
   if (result.count("minSurvival"))  config.minSurvival = result["minSurvival"].as<uint>();
   if (result.count("minEnveloppe"))  config.minEnveloppe = result["minEnveloppe"].as<float>();
@@ -56,8 +62,8 @@ int run(int argc, char *argv[]) {
   QApplication a(argc, argv);
   setlocale(LC_NUMERIC,"C");
 
-  simulation::Simulation::PTree pt = json::parse(utils::readAll(result["tree"].as<std::string>()));
-  gui::PhylogenyViewer pv (nullptr, pt, config);
+  PTree pt = nlohmann::json::parse(utils::readAll(result["tree"].as<std::string>()));
+  PViewer pv (nullptr, pt, config);
 //  std::cout << pt << std::endl;
 
   pv.update();
