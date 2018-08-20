@@ -7,7 +7,9 @@
 
 #include "kgd/external/json.hpp"
 
-template <typename GENOME, typename CONFIG>
+#include "crossconfig.h"
+
+template <typename GENOME>
 struct BailOutCrossover {
   using Alignment = typename GENOME::Alignment;
 
@@ -54,6 +56,7 @@ struct BailOutCrossover {
     template <typename RND>
     void mutate (RND &rnd) {
       using CDM = CrossoverDataMutations;
+      using CONFIG = CrossoverConfig;
       switch (rnd.pickOne(CONFIG::cdMutations())) {
       case CDM::DISTANCE: CONFIG::optimalDistance().mutate(optimalDistance, rnd); break;
       case CDM::INBREED:  CONFIG::inbreedTolerance().mutate(inbreedTolerance, rnd); break;
@@ -72,6 +75,7 @@ struct BailOutCrossover {
     }
 
     friend double distance (const Data &lhs, const Data &rhs) {
+      using CONFIG = CrossoverConfig;
       double d = 0;
       d += fabs(lhs.optimalDistance - rhs.optimalDistance) / CONFIG::optimalDistance().span();
       d += fabs(lhs.inbreedTolerance - rhs.inbreedTolerance) / CONFIG::inbreedTolerance().span();
@@ -97,6 +101,7 @@ struct BailOutCrossover {
 
     template <typename RND>
     static Data random (RND &rnd) {
+      using CONFIG = CrossoverConfig;
       Data d;
       d.optimalDistance = CONFIG::optimalDistance().rand(rnd);
       d.inbreedTolerance = CONFIG::inbreedTolerance().rand(rnd);
@@ -182,7 +187,7 @@ struct BailOutCrossover {
   }
 };
 
-template <typename G, typename C>
-std::atomic<typename BailOutCrossover<G,C>::Data::ID> BailOutCrossover<G,C>::Data::NEXT_ID (0);
+template <typename G>
+std::atomic<typename BailOutCrossover<G>::Data::ID> BailOutCrossover<G>::Data::NEXT_ID (0);
 
 #endif // _CROSSOVER_HPP_

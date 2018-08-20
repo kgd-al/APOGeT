@@ -12,7 +12,7 @@
 #include "ptreeconfig.h"
 #include "kgd/external/json.hpp"
 
-namespace genotype {
+namespace phylogeny {
 
 static constexpr int D_PTREE = 0;
 
@@ -94,8 +94,8 @@ public:
   }
 
 protected:
-  template <typename _GENOME>
-  friend class PTreeIntrospecter;
+  template <typename _GENOME> class PTreeIntrospecter;
+  friend class PTreeIntrospecter<GENOME>;
 
   NodeID _nextNodeID;
 
@@ -345,6 +345,6 @@ public:
   }
 };
 
-} // end of namespace genotype
+} // end of namespace phylogeny
 
 #endif // _PHYLOGENIC_TREE_H_

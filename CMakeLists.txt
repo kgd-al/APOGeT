@@ -28,6 +28,8 @@ include_directories(${tools_INCLUDE_DIRS})
 
 add_library(apt-core STATIC
     "src/core/crossover.hpp"
+    "src/core/crossconfig.h"
+    "src/core/crossconfig.cpp"
     "src/core/phylogenictree.hpp"
     "src/core/ptreeconfig.h"
     "src/core/ptreeconfig.cpp"
@@ -54,9 +56,8 @@ if (NOT CLUSTER_BUILD)
     ################################################################################################
 
     add_library(apt-gui STATIC
-        "src/core/crossover.hpp"
-        "src/core/phylogenictree.hpp"
         "src/visu/phylogenyviewer.h"
+        "src/visu/ptreeintrospecter.hpp"
         "src/visu/phylogenyviewer.cpp"
         "src/visu/graphicsviewzoom.h"
         "src/visu/graphicsviewzoom.cpp"
@@ -69,6 +70,13 @@ if (NOT CLUSTER_BUILD)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
     set(MAYBE_GUI "apt-gui")
     set(GUI_LIB "$<TARGET_FILE_NAME:apt-gui>")
+
+    add_executable(
+        viewer
+        src/visu/basicviewer.cpp
+    )
+    target_link_libraries(viewer apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
+    set_property(TARGET viewer PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 endif()
 
@@ -94,6 +102,9 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/"
         DESTINATION include/kgd/apt
         FILES_MATCHING
             PATTERN "*.h"
+        PERMISSIONS
+            OWNER_EXECUTE OWNER_READ
+            GROUP_EXECUTE GROUP_READ
             PATTERN "*.hpp"
         PERMISSIONS
             OWNER_EXECUTE OWNER_READ

@@ -1,8 +1,10 @@
 #include <QApplication>
 #include <QMainWindow>
 
-#include "../tools/external/cxxopts.hpp"
-#include "../tools/utils/utils.h"
+#include "kgd/external/cxxopts.hpp"
+#include "kgd/utils/utils.h"
+
+#include "kgd/settings/configfile.h"
 
 template <typename GENOME>
 int run(int argc, char *argv[]) {
