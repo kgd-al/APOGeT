@@ -14,7 +14,7 @@ namespace genotype {
 template <typename GENOME, typename Alignment = typename GENOME::Alignment>
 struct BailOutCrossover {
   class Data {
-    double gaussoid (double x, double mu, double sigma) {
+    double gaussoid (double x, double mu, double sigma) const {
       return exp(-((x-mu)*(x-mu)/(2.*sigma*sigma)));
     }
 
@@ -37,7 +37,7 @@ struct BailOutCrossover {
     static std::atomic<ID> NEXT_ID;
     ID id;
 
-    enum Parent { MOTHER, FATHER };
+    enum Parent : uint { MOTHER = 0, FATHER = 1 };
     ID parents [2];
 
     uint generation;
@@ -45,7 +45,15 @@ struct BailOutCrossover {
     // ========================================================================
     // == Member function(s)
 
-    double operator() (double distance) {
+    bool hasParent (Parent p) const {
+      return parents[p] != NO_ID;
+    }
+
+    ID parent (Parent p) const {
+      return parents[p];
+    }
+
+    double operator() (double distance) const {
       return gaussoid(distance, optimalDistance,
                       distance < optimalDistance ? inbreedTolerance : outbreedTolerance);
     }
@@ -131,27 +139,27 @@ struct BailOutCrossover {
     }
 
     friend void to_json (nlohmann::json &j, const Data &d) {
-      j["distance"] = d.optimalDistance;
-      j["inbreed"] = d.inbreedTolerance;
-      j["outbreed"] = d.outbreedTolerance;
-      j["sex"] = d.sex;
+      j["mu"] = d.optimalDistance;
+      j["si"] = d.inbreedTolerance;
+      j["so"] = d.outbreedTolerance;
+      j["S"] = d.sex;
 
       j["id"] = d.id;
-      j["mother"] = d.parents[MOTHER];
-      j["father"] = d.parents[FATHER];
-      j["gen"] = d.generation;
+      j["p0"] = d.parents[MOTHER];
+      j["p1"] = d.parents[FATHER];
+      j["G"] = d.generation;
     }
 
     friend void from_json (const nlohmann::json &j, Data &d) {
-      d.optimalDistance = j["distance"];
-      d.inbreedTolerance = j["inbreed"];
-      d.outbreedTolerance = j["outbreed"];
-      d.sex = j["sex"];
+      d.optimalDistance = j["mu"];
+      d.inbreedTolerance = j["si"];
+      d.outbreedTolerance = j["so"];
+      d.sex = j["S"];
 
       d.id = j["id"];
-      d.parents[MOTHER] = j["mother"];
-      d.parents[FATHER] = j["father"];
-      d.generation = j["gen"];
+      d.parents[MOTHER] = j["p0"];
+      d.parents[FATHER] = j["p1"];
+      d.generation = j["G"];
     }
 
     // ========================================================================

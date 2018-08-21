@@ -43,11 +43,12 @@ public:
   }
 
   NodeID addGenome (int x, const GENOME &g) {
-    if (!g.hasParent(1) || !g.hasParent(0))
+    using Parent = typename GENOME::CData::Parent;
+    if (!g.hasParent(Parent::FATHER) || !g.hasParent(Parent::MOTHER))
       return addGenome(x, g, _root);
 
-    uint mID = _idToSpecies.at(g.parent(0)),
-         pID = _idToSpecies.at(g.parent(1));
+    uint mID = _idToSpecies.at(g.parent(Parent::MOTHER)),
+         pID = _idToSpecies.at(g.parent(Parent::FATHER));
 
     assert(PTreeConfig::ignoreHybrids() || mID == pID);
     if (mID != pID) _hybrids++;
@@ -231,7 +232,7 @@ protected:
     uint matable = 0;
     for (const GENOME &e: species->enveloppe) {
       double d = distance(g, e);
-      double c = std::min(g.compatibility(d), e.compatibility(d));
+      double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
 
       if (c >= PTreeConfig::compatibilityThreshold()) matable++;
       compatibilities.push_back(c);
