@@ -316,7 +316,7 @@ struct PTreeIntrospecter {
       );
     }
 
-    bool survivor = (n.data.lastAppearance / T) >= 1;
+    bool survivor = (n.data.lastAppearance >= T);
     Node *gn = new Node (pos, n);
     gn->setScale(size);
     gn->setVisible(config.showNames);

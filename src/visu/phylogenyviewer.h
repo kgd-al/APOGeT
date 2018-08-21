@@ -66,7 +66,7 @@ public:
   void update (void) override {
     _scene->clear();
 
-    if (PTI::totalSteps(_ptree) > 0) {
+    if (PTI::totalSteps(_ptree) >= 0) {
       PTI::fillScene(_ptree, _scene, _config);
       if (_config.circular)
         PTI::toCircular(_scene);

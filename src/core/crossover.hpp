@@ -186,8 +186,8 @@ struct BailOutCrossover {
     assert(0 <= compat && compat <= 1);
 
     if (rnd(compat)) {
-      child = crossover(mother, father, alg, rnd);
-      child.mutate(rnd);
+      child = crossover(mother, father, rnd, alg);
+      if (rnd(CrossoverConfig::mutateChild())) child.mutate(rnd);
       return true;
     }
 

@@ -3,6 +3,8 @@
 #define CFILE CrossoverConfig
 template <typename T> using B = typename CFILE::B<T>;
 
+DEFINE_PARAMETER(float, mutateChild, .5)
+
 DEFINE_PARAMETER(B<float>, optimalDistance, 0.f, true, 4.f, 100.f)
 DEFINE_PARAMETER(B<float>, inbreedTolerance, 0.f, 2.f, 2.f, 10.f)
 DEFINE_PARAMETER(B<float>, outbreedTolerance, 0.f, 2.f, 2.f, 10.f)

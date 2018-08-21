@@ -11,6 +11,8 @@ DEFINE_PRETTY_ENUMERATION(
 
 #define CFILE CrossoverConfig
 struct CFILE : public ConfigFile<CFILE>, public MutationSettings {
+  DECLARE_PARAMETER(float, mutateChild)
+
   DECLARE_PARAMETER(B<float>, optimalDistance)
   DECLARE_PARAMETER(B<float>, inbreedTolerance)
   DECLARE_PARAMETER(B<float>, outbreedTolerance)

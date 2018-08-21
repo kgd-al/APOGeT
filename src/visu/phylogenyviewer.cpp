@@ -52,7 +52,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   _view = new QGraphicsView(_scene, this);
   _scene->setBackgroundBrush(Qt::transparent);
   _view->setRenderHint(QPainter::Antialiasing, true);
-  _view->viewport()->setMinimumSize(512, 512);
+//  _view->viewport()->setMinimumSize(512, 512);
   _view->setDragMode(QGraphicsView::ScrollHandDrag);
   _view->setBackgroundBrush(Qt::white);
 
