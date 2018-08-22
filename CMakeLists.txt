@@ -118,7 +118,7 @@ set(CONFIG "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake")
 file(GENERATE
     OUTPUT ${CONFIG}
     CONTENT
-"# CMake configuration settings for project ${PROJECT_NAME}
+"# CMake configuration settings for project ${PROJECT_NAME} (${CMAKE_BUILD_TYPE})
 
 set(${PROJECT_NAME}_INCLUDE_DIRS
     ${tools_INCLUDE_DIRS}

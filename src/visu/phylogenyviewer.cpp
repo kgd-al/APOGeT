@@ -38,7 +38,7 @@ struct FancySlider : public QSlider {
 };
 
 template <typename O, typename F>
-QWidget* makeSlider (int min, int max, O *object, F callback) {
+auto makeSlider (int min, int max, O *object, F callback) {
   QSlider *slider = new FancySlider(Qt::Horizontal);
   slider->setMinimum(min);
   slider->setMaximum(max);
@@ -48,7 +48,7 @@ QWidget* makeSlider (int min, int max, O *object, F callback) {
 }
 
 void PhylogenyViewer_base::constructorDelegate(uint steps) {
-  _scene = new QGraphicsScene();
+  _scene = new QGraphicsScene(this);
   _view = new QGraphicsView(_scene, this);
   _scene->setBackgroundBrush(Qt::transparent);
   _view->setRenderHint(QPainter::Antialiasing, true);
@@ -60,8 +60,10 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
 
   QToolBar *toolbar = new QToolBar;
 
-  QWidget *mSSlider = makeSlider(0, steps, this, &PhylogenyViewer_base::updateMinSurvival);
-  QWidget *mESlider = makeSlider(0, 100, this, &PhylogenyViewer_base::updateMinEnveloppe);
+  QSlider *mSSlider = makeSlider(0, steps, this, &PhylogenyViewer_base::updateMinSurvival);
+  connect(this, &PhylogenyViewer_base::updatedMaxSurvival, mSSlider, &QSlider::setMaximum);
+
+  QSlider *mESlider = makeSlider(0, 100, this, &PhylogenyViewer_base::updateMinEnveloppe);
 
   QAction *print = new QAction(style()->standardPixmap(QStyle::SP_DialogSaveButton), "Print", this);
   print->setShortcut(Qt::ControlModifier + Qt::Key_P);
@@ -98,14 +100,17 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   setWindowTitle("Phenotypic tree");
 }
 
-void PhylogenyViewer_base::update(uint step) {
-  QString file;
-  QTextStream qss(&file);
-  qss << "snapshots/ptree_step" << step << ".png";
-  static int i=0;
-  qDebug() << "[" << i++ << "] saved " << file;
-  printTo(file);
+void PhylogenyViewer_base::update(uint step, bool save) {
+  if (save) {
+    QString file;
+    QTextStream qss(&file);
+    qss << "snapshots/ptree_step" << step << ".png";
+    static int i=0;
+    qDebug() << "[" << i++ << "] saved " << file;
+    printTo(file);
+  }
 
+  emit updatedMaxSurvival(step);
   QDialog::update();
 }
 

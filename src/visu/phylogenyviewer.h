@@ -21,14 +21,17 @@ public:
 
   PhylogenyViewer_base (QWidget *parent, Config config) : QDialog(parent), _config(config) {}
 
-  virtual void update (void) = 0;
-  void update (uint step);
+  virtual void update (bool save = false) = 0;
+  void update (uint step, bool save);
 
   void resizeEvent(QResizeEvent *event);
 
   static Config defaultConfig (void) {
     return { 0, 0, true, true, true };
   }
+
+signals:
+  void updatedMaxSurvival (int v);
 
 public slots:
   void updateMinSurvival (int v);
@@ -63,10 +66,11 @@ public:
     constructorDelegate(PTI::totalSteps(_ptree));
   }
 
-  void update (void) override {
+  void update (bool save = false) override {
+    uint step = PTI::totalSteps(_ptree);
     _scene->clear();
 
-    if (PTI::totalSteps(_ptree) >= 0) {
+    if (step >= 0) {
       PTI::fillScene(_ptree, _scene, _config);
       if (_config.circular)
         PTI::toCircular(_scene);
@@ -74,7 +78,7 @@ public:
       makeFit(_config.autofit);
     }
 
-    PhylogenyViewer_base::update(PTI::totalSteps(_ptree));
+    PhylogenyViewer_base::update(step, save);
   }
 
 private:
