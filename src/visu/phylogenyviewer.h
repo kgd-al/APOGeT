@@ -33,6 +33,10 @@ public:
 signals:
   void updatedMaxSurvival (int v);
 
+  void newSpecies (uint sid);
+  void genomeEntersEnveloppe (uint sid, uint gid);
+  void genomeLeavesEnveloppe (uint sid, uint gid);
+
 public slots:
   void updateMinSurvival (int v);
   void updateMinEnveloppe (int v);
@@ -58,11 +62,15 @@ template <typename GENOME>
 class PhylogenyViewer : public PhylogenyViewer_base {
 public:
   using PTree = phylogeny::PhylogenicTree<GENOME>;
+  using PTCallbacks = typename PTree::Callbacks;
+  friend PTCallbacks;
+
   using PTI = phylogeny::PTreeIntrospecter<GENOME>;
 
   PhylogenyViewer(QWidget *parent, PTree &ptree) : PhylogenyViewer(parent, ptree, defaultConfig()) {}
   PhylogenyViewer(QWidget *parent, PTree &ptree, Config config)
-    : PhylogenyViewer_base(parent, config), _ptree(ptree) {
+    : PhylogenyViewer_base(parent, config), _ptree(ptree), callbacks(this) {
+    _ptree.setCallbacks(&callbacks);
     constructorDelegate(PTI::totalSteps(_ptree));
   }
 
@@ -83,8 +91,29 @@ public:
 
 private:
   const PTree &_ptree;
+  PTCallbacks callbacks;
 };
 
 } // end namespace gui
+
+template <typename GENOME>
+struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
+  Callbacks_t (gui::PhylogenyViewer_base *v) : viewer(v) {}
+
+  void onNewSpecies (uint sid) {
+    emit viewer->newSpecies(sid);
+  }
+
+  void onGenomeEntersEnveloppe (uint sid, uint gid) {
+    emit viewer->genomeEntersEnveloppe(sid, gid);
+  }
+
+  void onGenomeLeavesEnveloppe (uint sid, uint gid) {
+    emit viewer->genomeLeavesEnveloppe(sid, gid);
+  }
+
+private:
+  gui::PhylogenyViewer_base *viewer;
+};
 
 #endif // PHYLOGENYVIEWER_H

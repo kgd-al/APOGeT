@@ -53,6 +53,10 @@ struct BailOutCrossover {
       return parents[p];
     }
 
+    float getOptimalDistance (void) const { return optimalDistance; }
+    float getInbreedTolerance (void) const { return inbreedTolerance; }
+    float getOutbreedTolerance (void) const { return outbreedTolerance; }
+
     double operator() (double distance) const {
       return gaussoid(distance, optimalDistance,
                       distance < optimalDistance ? inbreedTolerance : outbreedTolerance);

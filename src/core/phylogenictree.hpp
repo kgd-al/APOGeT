@@ -17,19 +17,31 @@ namespace phylogeny {
 template <typename _GENOME> class PTreeIntrospecter;
 static constexpr int D_PTREE = 0;
 
+template <typename PT>
+struct Callbacks_t {
+  void onNewSpecies (uint sid);
+  void onGenomeEntersEnveloppe (uint sid, uint gid);
+  void onGenomeLeavesEnveloppe (uint sid, uint gid);
+};
+
 template <typename GENOME>
 class PhylogenicTree {
   using NodeID = uint;
   static constexpr NodeID NoID = NodeID(-1);
 
 public:
+  using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
 
   PhylogenicTree(void) {
     _nextNodeID = 0;
     _step = 0;
     _hybrids = 0;
     _root = makeNode(nullptr);
+    _callbacks = nullptr;
   }
+
+  void setCallbacks (Callbacks *c) const { _callbacks = c; }
+  Callbacks* callbacks (void) {   return _callbacks; }
 
   void step (uint step, const std::set<uint> &alivePlants) {
     std::set<NodeID> aliveSpecies;
@@ -173,6 +185,8 @@ protected:
 
   std::vector<Node_ptr> _nodes;
 
+  mutable Callbacks *_callbacks;
+
   uint _hybrids;
   uint _step;
 
@@ -190,7 +204,7 @@ protected:
     std::vector<float> compatibilities;
     // Compatible enough with current species
     if (matchesSpecies(g, species, compatibilities)) {
-      insertInto(_step,x, g, species, compatibilities);
+      insertInto(_step,x, g, species, compatibilities, _callbacks);
       _idToSpecies[g.id()] = species->id;
       return species->id;
     }
@@ -200,7 +214,7 @@ protected:
     // Belongs to subspecies ?
     for (Node_ptr &subspecies: species->children) {
       if (matchesSpecies(g, subspecies, compatibilities)) {
-        insertInto(_step,x, g, subspecies, compatibilities);
+        insertInto(_step,x, g, subspecies, compatibilities, _callbacks);
         _idToSpecies[g.id()] = subspecies->id;
         return subspecies->id;
       }
@@ -213,8 +227,9 @@ protected:
       subspecies->data.xmin = x;
       subspecies->data.xmax = x;
       species->children.push_back(subspecies);
-      insertInto(_step, x, g, subspecies, compatibilities);
+      insertInto(_step, x, g, subspecies, compatibilities, _callbacks);
       _idToSpecies[g.id()] = subspecies->id;
+      if (_callbacks)  _callbacks->onNewSpecies(subspecies->id);
       return subspecies->id;
 
     } else {
@@ -242,7 +257,7 @@ protected:
   }
 
   friend void insertInto (uint step, int x, const GENOME &g, Node_ptr species,
-                          const std::vector<float> &compatibilities) {
+                          const std::vector<float> &compatibilities, Callbacks *callbacks) {
 
     const uint k = species->enveloppe.size();
 
@@ -255,6 +270,7 @@ protected:
       if (D_PTREE)  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(g);
+      if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id, g.id());
       for (uint i=0; i<k; i++)
         dist[{i, k}] = compatibilities[i];
 
@@ -280,13 +296,17 @@ protected:
 
       assert(!further || closer < PTreeConfig::enveloppeSize());
 
-      // Quiet genome inside the enveloppe. Nothing to good
+      // Genome inside the enveloppe. Nothing to do
       if (!further) {
         if (D_PTREE)  std::cerr << "\tUnremarkable genome" << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
         if (D_PTREE)  std::cerr << "\tReplaced enveloppe point " << closer << std::endl;
+        if (callbacks) {
+          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[closer].id());
+          callbacks->onGenomeEntersEnveloppe(species->id, g.id());
+        }
         species->enveloppe[closer] = g;
         for (uint i=0; i<k; i++)
           if (i != closer)
