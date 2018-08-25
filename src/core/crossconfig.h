@@ -10,7 +10,10 @@ DEFINE_PRETTY_ENUMERATION(
 )
 
 #define CFILE CrossoverConfig
-struct CFILE : public ConfigFile<CFILE>, public MutationSettings {
+struct CFILE : public ConfigFile<CFILE> {
+  template <typename T> using B = MutationSettings::B<T>;
+  template <typename E> using MutationRates = MutationSettings::MutationRates<E>;
+
   DECLARE_PARAMETER(float, mutateChild)
 
   DECLARE_PARAMETER(B<float>, optimalDistance)

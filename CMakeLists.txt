@@ -14,6 +14,7 @@ else ()
 endif ()
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
 
 ####################################################################################################
 ## Self dependancies
@@ -69,7 +70,7 @@ if (NOT CLUSTER_BUILD)
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
     set(MAYBE_GUI "apt-gui;apt-basicviewer")
-    set(GUI_LIB "$<TARGET_FILE_NAME:apt-gui>")
+    set(GUI_LIB "${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui>")
 
     add_executable(
         apt-basicviewer
@@ -125,7 +126,7 @@ set(${PROJECT_NAME}_INCLUDE_DIRS
     ${CMAKE_INSTALL_PREFIX}/include)
 
 set(${PROJECT_NAME}_LIBRARIES
-    $<JOIN:${tools_LIBRARIES};$<TARGET_FILE_NAME:apt-core>;${GUI_LIB},
-    ${CMAKE_INSTALL_PREFIX}/lib/kgd/apt/>)\n"
+    $<JOIN:${tools_LIBRARIES};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>;${GUI_LIB},
+    >)\n"
 )
 install(FILES ${CONFIG} DESTINATION cmake)

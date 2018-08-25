@@ -15,7 +15,6 @@
 namespace phylogeny {
 
 template <typename _GENOME> class PTreeIntrospecter;
-static constexpr int D_PTREE = 0;
 
 template <typename PT>
 struct Callbacks_t {
@@ -68,12 +67,15 @@ public:
       return addGenome(x, g, _nodes[mID]);
 
     else if (PTreeConfig::ignoreHybrids()) {
-      if (D_PTREE)  std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
+      if (PTreeConfig::DEBUG())
+        std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
+
       return addGenome(x, g, _nodes[mID]);
 
     } else {
       assert(false);
-      if (D_PTREE)  std::cerr << "Managing hybrid genome " << g.id() << std::endl;
+      if (PTreeConfig::DEBUG())
+        std::cerr << "Managing hybrid genome " << g.id() << std::endl;
     }
 
     return NoID;
@@ -82,7 +84,9 @@ public:
   void delGenome (uint step, uint id) {
     auto it = _idToSpecies.find(id);
     if (it != _idToSpecies.end()) {
-      if (D_PTREE)  std::cerr << "New last appearance of species " << it->second << " is " << step << std::endl;
+      if (PTreeConfig::DEBUG())
+        std::cerr << "New last appearance of species " << it->second << " is " << step << std::endl;
+
       _nodes[it->second]->data.lastAppearance = step;
     }
 //    _idToSpecies.erase(id);
@@ -199,7 +203,8 @@ protected:
   }
 
   NodeID addGenome (int x, const GENOME &g, Node_ptr species) {
-    if (D_PTREE)  std::cerr << "Adding genome " << g.id() << " to species " << species->id << std::endl;
+    if (PTreeConfig::DEBUG())
+      std::cerr << "Adding genome " << g.id() << " to species " << species->id << std::endl;
 
     std::vector<float> compatibilities;
     // Compatible enough with current species
@@ -209,7 +214,8 @@ protected:
       return species->id;
     }
 
-    if (D_PTREE)  std::cerr << "\tIncompatible with " << species->id << std::endl;
+    if (PTreeConfig::DEBUG())
+      std::cerr << "\tIncompatible with " << species->id << std::endl;
 
     // Belongs to subspecies ?
     for (Node_ptr &subspecies: species->children) {
@@ -261,13 +267,14 @@ protected:
 
     const uint k = species->enveloppe.size();
 
-    if (D_PTREE)  std::cerr << "\tCompatible with " << species->id << std::endl;
+    if (PTreeConfig::DEBUG())
+      std::cerr << "\tCompatible with " << species->id << std::endl;
 
     auto &dist = species->distances;
 
     // Populate the enveloppe
     if (species->enveloppe.size() < PTreeConfig::enveloppeSize()) {
-      if (D_PTREE)  std::cerr << "\tAppend to the enveloppe" << std::endl;
+      if (PTreeConfig::DEBUG())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(g);
       if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id, g.id());
@@ -278,39 +285,44 @@ protected:
     } else {
       assert(k == PTreeConfig::enveloppeSize());
 
-      bool further = false;
-      double min = compatibilities[0];
-      uint closer = 0;
-
-      for (uint i=0; i<k; i++) {
-        for (uint j=0; j<i; j++) {
-          double c = compatibilities[j];
-          further = (dist[{i,j}] < c);
-
-          if (c < min) {
-            min = c;
-            closer = i;
-          }
+      /// Find most similar current enveloppe point
+      double bestCompability = compatibilities[0];
+      uint mostCompatible = 0;
+      for (uint i=1; i<k; i++) {
+        double c = compatibilities[i];
+        if (bestCompability < c) {
+          bestCompability = c;
+          mostCompatible = i;
         }
       }
 
-      assert(!further || closer < PTreeConfig::enveloppeSize());
+      /// Compute number of times 'g' is better (i.e. more distinct) than the one on the ejectable seat
+      uint newIsBest = 0;
+      for (uint i=0; i<k; i++)
+        if (i != mostCompatible)
+          newIsBest += (compatibilities[i] < dist[{i,mostCompatible}]);
 
       // Genome inside the enveloppe. Nothing to do
-      if (!further) {
-        if (D_PTREE)  std::cerr << "\tUnremarkable genome" << std::endl;
+      if (newIsBest < PTreeConfig::outperformanceThreshold() * k) {
+        if (PTreeConfig::DEBUG())
+          std::cerr << "\tGenome deemed unremarkable with "
+                    << k - newIsBest << " to " << newIsBest << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
-        if (D_PTREE)  std::cerr << "\tReplaced enveloppe point " << closer << std::endl;
+        if (PTreeConfig::DEBUG())
+          std::cerr << "\tReplaced enveloppe point " << mostCompatible
+                    << " with a vote of " << newIsBest << " to " << k - newIsBest
+                    << std::endl;
+
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[closer].id());
+          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[mostCompatible].id());
           callbacks->onGenomeEntersEnveloppe(species->id, g.id());
         }
-        species->enveloppe[closer] = g;
+        species->enveloppe[mostCompatible] = g;
         for (uint i=0; i<k; i++)
-          if (i != closer)
-            dist[{i,closer}] = compatibilities[i];
+          if (i != mostCompatible)
+            dist[{i,mostCompatible}] = compatibilities[i];
       }
     }
 
