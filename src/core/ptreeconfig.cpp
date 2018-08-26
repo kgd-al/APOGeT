@@ -10,6 +10,6 @@ DEFINE_PARAMETER(bool, simpleNewSpecies, true)
 DEFINE_PARAMETER(bool, ignoreHybrids, true)
 DEFINE_PARAMETER(bool, winningPathOnly, false)
 
-DEFINE_PARAMETER(int, DEBUG, 0)
+DEFINE_DEBUG_PARAMETER(int, DEBUG, 0)
 
 #undef CFILE

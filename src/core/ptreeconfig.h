@@ -22,7 +22,7 @@ struct CFILE : public ConfigFile<CFILE> {
   DECLARE_PARAMETER(bool, ignoreHybrids)
   DECLARE_PARAMETER(bool, winningPathOnly)
 
-  DECLARE_PARAMETER(int, DEBUG)
+  DECLARE_DEBUG_PARAMETER(int, DEBUG, 0)
 };
 #undef CFILE
 

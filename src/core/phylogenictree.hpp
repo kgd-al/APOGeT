@@ -295,24 +295,36 @@ protected:
           mostCompatible = i;
         }
       }
+      if (PTreeConfig::DEBUG() >= 2)
+        std::cerr << "\tMost similar to "
+                  << mostCompatible
+                  << " (id: " << species->enveloppe[mostCompatible].id()
+                  << ", c = " << bestCompability << ")" << std::endl;
 
       /// Compute number of times 'g' is better (i.e. more distinct) than the one on the ejectable seat
       uint newIsBest = 0;
-      for (uint i=0; i<k; i++)
-        if (i != mostCompatible)
+      for (uint i=0; i<k; i++) {
+        if (i != mostCompatible) {
+          if (PTreeConfig::DEBUG() >= 2)
+            std::cerr << "\t" << i << "(" << species->enveloppe[i].id()
+                      << "): " << compatibilities[i] << " <? "
+                      << dist[{i,mostCompatible}] << std::endl;
+
           newIsBest += (compatibilities[i] < dist[{i,mostCompatible}]);
+        }
+      }
 
       // Genome inside the enveloppe. Nothing to do
-      if (newIsBest < PTreeConfig::outperformanceThreshold() * k) {
+      if (newIsBest < PTreeConfig::outperformanceThreshold() * (k-1)) {
         if (PTreeConfig::DEBUG())
           std::cerr << "\tGenome deemed unremarkable with "
-                    << k - newIsBest << " to " << newIsBest << std::endl;
+                    << k - 1 - newIsBest << " to " << newIsBest << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
         if (PTreeConfig::DEBUG())
           std::cerr << "\tReplaced enveloppe point " << mostCompatible
-                    << " with a vote of " << newIsBest << " to " << k - newIsBest
+                    << " with a vote of " << newIsBest << " to " << k - 1 - newIsBest
                     << std::endl;
 
         if (callbacks) {

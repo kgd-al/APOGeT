@@ -3,9 +3,8 @@
 #include "../visu/standaloneviewer.hpp"
 
 struct Genome {
-
-  friend void to_json (nlohmann::json &j, const Genome &g) {}
-  friend void from_json (const nlohmann::json &j, Genome &g) {}
+  friend void to_json (nlohmann::json&, const Genome&) {}
+  friend void from_json (const nlohmann::json&, Genome&) {}
 };
 
 #define CFILE BasicConfig
