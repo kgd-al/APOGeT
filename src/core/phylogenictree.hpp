@@ -25,8 +25,11 @@ struct Callbacks_t {
 
 template <typename GENOME>
 class PhylogenicTree {
-  using NodeID = uint;
-  static constexpr NodeID NoID = NodeID(-1);
+  using GID = typename GENOME::CData::GID;
+  using SID = uint;
+
+  using Parent = typename GENOME::CData::Parent;
+  static constexpr SID NoID = SID(-1);
 
 public:
   using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
@@ -42,35 +45,38 @@ public:
   void setCallbacks (Callbacks *c) const { _callbacks = c; }
   Callbacks* callbacks (void) {   return _callbacks; }
 
-  void step (uint step, const std::set<uint> &alivePlants) {
-    std::set<NodeID> aliveSpecies;
-    for (uint pid: alivePlants)
-      aliveSpecies.insert(_idToSpecies.at(pid));
+  template <typename IT, typename F>
+  void step (uint step, IT begin, IT end, F geneticID) {
+    std::set<SID> aliveSpecies;
+    for (IT it = begin; it != end; ++it)
+      aliveSpecies.insert(_idToSpecies.at(geneticID(*it)));
 
-    for (NodeID sid: aliveSpecies)
+    for (SID sid: aliveSpecies)
       _nodes.at(sid)->data.lastAppearance = step;
 
     _step = step;
+
+    if (PTreeConfig::DEBUG())
+      std::cerr << _idToSpecies.size() << " id>species pairs stored" << std::endl;
   }
 
-  NodeID addGenome (int x, const GENOME &g) {
-    using Parent = typename GENOME::CData::Parent;
+  SID addGenome (int x, const GENOME &g) {
     if (!g.hasParent(Parent::FATHER) || !g.hasParent(Parent::MOTHER))
       return addGenome(x, g, _root);
 
-    uint mID = _idToSpecies.at(g.parent(Parent::MOTHER)),
-         pID = _idToSpecies.at(g.parent(Parent::FATHER));
+    uint mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
+         pSID = _idToSpecies.parentSID(g, Parent::FATHER);
 
-    assert(PTreeConfig::ignoreHybrids() || mID == pID);
-    if (mID != pID) _hybrids++;
-    if (mID == pID)
-      return addGenome(x, g, _nodes[mID]);
+    assert(PTreeConfig::ignoreHybrids() || mSID == pSID);
+    if (mSID != pSID) _hybrids++;
+    if (mSID == pSID)
+      return addGenome(x, g, _nodes[mSID]);
 
     else if (PTreeConfig::ignoreHybrids()) {
       if (PTreeConfig::DEBUG())
         std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
 
-      return addGenome(x, g, _nodes[mID]);
+      return addGenome(x, g, _nodes[mSID]);
 
     } else {
       assert(false);
@@ -81,22 +87,12 @@ public:
     return NoID;
   }
 
-  void delGenome (uint step, uint id) {
-    auto it = _idToSpecies.find(id);
-    if (it != _idToSpecies.end()) {
-      if (PTreeConfig::DEBUG())
-        std::cerr << "New last appearance of species " << it->second << " is " << step << std::endl;
+  void delGenome (uint step, const GENOME &g) {
+    auto sid = _idToSpecies.remove(g);
+    if (PTreeConfig::DEBUG())
+      std::cerr << "New last appearance of species " << sid << " is " << step << std::endl;
 
-      _nodes[it->second]->data.lastAppearance = step;
-    }
-//    _idToSpecies.erase(id);
-  }
-
-  NodeID speciesID (uint id) {
-    auto it = _idToSpecies.find(id);
-    if (it != _idToSpecies.end())
-          return it->second;
-    else  return NoID;
+    _nodes[sid]->data.lastAppearance = step;
   }
 
   friend std::ostream& operator<< (std::ostream &os, const PhylogenicTree &pt) {
@@ -114,9 +110,7 @@ public:
 protected:
   friend class PTreeIntrospecter<GENOME>;
 
-  NodeID _nextNodeID;
-
-  std::map<uint, NodeID> _idToSpecies;
+  SID _nextNodeID;
 
   template <typename T>
   struct ordered_pair {
@@ -132,7 +126,7 @@ protected:
   struct Node;
   using Node_ptr = std::shared_ptr<Node>;
   struct Node {
-    NodeID id;
+    SID id;
 
     struct Data {
       uint firstAppearance;
@@ -160,7 +154,7 @@ protected:
     std::vector<GENOME> enveloppe;
     std::map<ordered_pair<uint>, float> distances;
 
-    Node (NodeID id, Node_ptr parent) : id(id), parent(parent.get()) {}
+    Node (SID id, Node_ptr parent) : id(id), parent(parent.get()) {}
 
     friend std::ostream& operator<< (std::ostream &os, const Node &n) {
       std::string spacing = "> ";
@@ -185,9 +179,73 @@ protected:
     }
   };
 
+  struct DCCache {
+    std::vector<float> distances, compatibilities;
+
+    void reserve (uint n) {
+      distances.reserve(n), compatibilities.reserve(n);
+    }
+
+    void push_back (float d, float c) {
+      distances.push_back(d), compatibilities.push_back(c);
+    }
+  };
+
+  struct IdToSpeciesMap {
+    struct ITSMData {
+      SID species;
+      uint refCount;
+    };
+    std::map<GID, ITSMData> map;
+
+    uint size (void) const {
+      return map.size();
+    }
+
+    SID parentSID (const GENOME &g, Parent p) {
+      auto &d = map.at(g.parent(p));
+      d.refCount++;
+      return d.species;
+    }
+
+    SID remove (const GID id) {
+      auto it = map.find(id);
+      auto sid = it->second.species;
+      auto &ref = it->second.refCount;
+
+      assert(ref > 0);
+      ref--;
+
+      if (ref == 0)  map.erase(it);
+
+      return sid;
+    }
+
+    SID remove (const GENOME &g) {
+      auto sid = remove(g.id());
+      for (Parent p: {Parent::MOTHER, Parent::FATHER})
+        if (g.hasParent(p))
+          remove(g.parent(p));
+      return sid;
+    }
+
+    void insert (GID gid, SID sid) {
+      ITSMData d;
+      d.refCount = 1;
+      d.species = sid;
+      map[gid] = d;
+    }
+
+    SID at (GID gid) const {
+      return map.at(gid).species;
+    }
+  };
+
   Node_ptr _root;
 
   std::vector<Node_ptr> _nodes;
+
+  IdToSpeciesMap _idToSpecies;
 
   mutable Callbacks *_callbacks;
 
@@ -202,15 +260,15 @@ protected:
     return p;
   }
 
-  NodeID addGenome (int x, const GENOME &g, Node_ptr species) {
+  SID addGenome (int x, const GENOME &g, Node_ptr species) {
     if (PTreeConfig::DEBUG())
       std::cerr << "Adding genome " << g.id() << " to species " << species->id << std::endl;
 
-    std::vector<float> compatibilities;
+    DCCache dccache;
     // Compatible enough with current species
-    if (matchesSpecies(g, species, compatibilities)) {
-      insertInto(_step,x, g, species, compatibilities, _callbacks);
-      _idToSpecies[g.id()] = species->id;
+    if (matchesSpecies(g, species, dccache)) {
+      insertInto(_step,x, g, species, dccache, _callbacks);
+      _idToSpecies.insert(g.id(), species->id);
       return species->id;
     }
 
@@ -219,9 +277,9 @@ protected:
 
     // Belongs to subspecies ?
     for (Node_ptr &subspecies: species->children) {
-      if (matchesSpecies(g, subspecies, compatibilities)) {
-        insertInto(_step,x, g, subspecies, compatibilities, _callbacks);
-        _idToSpecies[g.id()] = subspecies->id;
+      if (matchesSpecies(g, subspecies, dccache)) {
+        insertInto(_step,x, g, subspecies, dccache, _callbacks);
+        _idToSpecies.insert(g.id(), subspecies->id);
         return subspecies->id;
       }
     }
@@ -233,8 +291,8 @@ protected:
       subspecies->data.xmin = x;
       subspecies->data.xmax = x;
       species->children.push_back(subspecies);
-      insertInto(_step, x, g, subspecies, compatibilities, _callbacks);
-      _idToSpecies[g.id()] = subspecies->id;
+      insertInto(_step, x, g, subspecies, dccache, _callbacks);
+      _idToSpecies.insert(g.id(), subspecies->id);
       if (_callbacks)  _callbacks->onNewSpecies(subspecies->id);
       return subspecies->id;
 
@@ -246,9 +304,9 @@ protected:
     return NoID;
   }
 
-  friend bool matchesSpecies (const GENOME &g, Node_ptr species, std::vector<float> &compatibilities) {
+  friend bool matchesSpecies (const GENOME &g, Node_ptr species, DCCache &dccache) {
     uint k = species->enveloppe.size();
-    compatibilities.reserve(k);
+    dccache.reserve(k);
 
     uint matable = 0;
     for (const GENOME &e: species->enveloppe) {
@@ -256,14 +314,14 @@ protected:
       double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
 
       if (c >= PTreeConfig::compatibilityThreshold()) matable++;
-      compatibilities.push_back(c);
+      dccache.push_back(d, c);
     }
 
     return matable >= PTreeConfig::similarityThreshold() * k;
   }
 
   friend void insertInto (uint step, int x, const GENOME &g, Node_ptr species,
-                          const std::vector<float> &compatibilities, Callbacks *callbacks) {
+                          const DCCache &dccache, Callbacks *callbacks) {
 
     const uint k = species->enveloppe.size();
 
@@ -279,38 +337,38 @@ protected:
       species->enveloppe.push_back(g);
       if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id, g.id());
       for (uint i=0; i<k; i++)
-        dist[{i, k}] = compatibilities[i];
+        dist[{i, k}] = dccache.distances[i];
 
     // Better enveloppe point ?
     } else {
       assert(k == PTreeConfig::enveloppeSize());
 
       /// Find most similar current enveloppe point
-      double bestCompability = compatibilities[0];
-      uint mostCompatible = 0;
+      double minDistance = dccache.distances[0];
+      uint closest = 0;
       for (uint i=1; i<k; i++) {
-        double c = compatibilities[i];
-        if (bestCompability < c) {
-          bestCompability = c;
-          mostCompatible = i;
+        double d = dccache.distances[i];
+        if (d < minDistance) {
+          minDistance = d;
+          closest = i;
         }
       }
       if (PTreeConfig::DEBUG() >= 2)
-        std::cerr << "\tMost similar to "
-                  << mostCompatible
-                  << " (id: " << species->enveloppe[mostCompatible].id()
-                  << ", c = " << bestCompability << ")" << std::endl;
+        std::cerr << "\t\tClosest to "
+                  << closest
+                  << " (id: " << species->enveloppe[closest].id()
+                  << ", d = " << minDistance << ")" << std::endl;
 
       /// Compute number of times 'g' is better (i.e. more distinct) than the one on the ejectable seat
       uint newIsBest = 0;
       for (uint i=0; i<k; i++) {
-        if (i != mostCompatible) {
+        if (i != closest) {
           if (PTreeConfig::DEBUG() >= 2)
-            std::cerr << "\t" << i << "(" << species->enveloppe[i].id()
-                      << "): " << compatibilities[i] << " <? "
-                      << dist[{i,mostCompatible}] << std::endl;
+            std::cerr << "\t\t" << i << "(" << species->enveloppe[i].id()
+                      << "): " << dccache.distances[i] << " >? "
+                      << dist[{i,closest}] << std::endl;
 
-          newIsBest += (compatibilities[i] < dist[{i,mostCompatible}]);
+          newIsBest += (dccache.distances[i] > dist[{i,closest}]);
         }
       }
 
@@ -323,18 +381,18 @@ protected:
       // Replace closest enveloppe point with new one
       } else {
         if (PTreeConfig::DEBUG())
-          std::cerr << "\tReplaced enveloppe point " << mostCompatible
+          std::cerr << "\tReplaced enveloppe point " << closest
                     << " with a vote of " << newIsBest << " to " << k - 1 - newIsBest
                     << std::endl;
 
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[mostCompatible].id());
+          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[closest].id());
           callbacks->onGenomeEntersEnveloppe(species->id, g.id());
         }
-        species->enveloppe[mostCompatible] = g;
+        species->enveloppe[closest] = g;
         for (uint i=0; i<k; i++)
-          if (i != mostCompatible)
-            dist[{i,mostCompatible}] = compatibilities[i];
+          if (i != closest)
+            dist[{i,closest}] = dccache.distances[i];
       }
     }
 

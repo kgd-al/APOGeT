@@ -1,8 +1,9 @@
-#include "../core/crossconfig.h"
-#include "../core/ptreeconfig.h"
+#include "../core/crossover.hpp"
 #include "../visu/standaloneviewer.hpp"
 
 struct Genome {
+  struct Alignment {};
+  using CData = genotype::BailOutCrossover<Genome, Alignment>::Data;
   friend void to_json (nlohmann::json&, const Genome&) {}
   friend void from_json (const nlohmann::json&, Genome&) {}
 };

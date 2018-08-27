@@ -32,13 +32,13 @@ struct BailOutCrossover {
     // ========================================================================
     // == Classification data
 
-    using ID = uint;
-    static constexpr ID NO_ID = ID(-1);
-    static std::atomic<ID> NEXT_ID;
-    ID id;
+    using GID = uint;
+    static constexpr GID NO_ID = GID(-1);
+    static std::atomic<GID> NEXT_ID;
+    GID id;
 
     enum Parent : uint { MOTHER = 0, FATHER = 1 };
-    ID parents [2];
+    GID parents [2];
 
     uint generation;
 
@@ -49,7 +49,7 @@ struct BailOutCrossover {
       return parents[p] != NO_ID;
     }
 
-    ID parent (Parent p) const {
+    GID parent (Parent p) const {
       return parents[p];
     }
 
@@ -78,7 +78,7 @@ struct BailOutCrossover {
 
     /// TODO This function is ill-named
     template <typename RNG>
-    void updateLineage (ID parent, RNG &rnd) {
+    void updateLineage (GID parent, RNG &rnd) {
       sex = rnd.toss(Sex::FEMALE, Sex::MALE);
       id = NEXT_ID++;
       parents[MOTHER] = parent;
@@ -200,7 +200,7 @@ struct BailOutCrossover {
 };
 
 template <typename G, typename A>
-std::atomic<typename BailOutCrossover<G, A>::Data::ID> BailOutCrossover<G, A>::Data::NEXT_ID (0);
+std::atomic<typename BailOutCrossover<G, A>::Data::GID> BailOutCrossover<G, A>::Data::NEXT_ID (0);
 
 } // end of namespace genotype
 
