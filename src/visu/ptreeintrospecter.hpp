@@ -35,10 +35,14 @@ struct PTreeIntrospecter {
           << "Enveloppe: " << n.enveloppe.size() << " / " << PTreeConfig::enveloppeSize() << "\n"
           << "Appeared at " << n.data.firstAppearance << "\n"
           << "Disappeared at " << n.data.lastAppearance << "\n"
-          << "x bounds: [" << n.data.xmin << "-" << n.data.xmax << "]\n"
+//          << "x bounds: [" << n.data.xmin << "-" << n.data.xmax << "]\n"
           << n.data.count << " individuals\n"
           << n.children.size() << " subspecies";
       setToolTip(tooltip);
+    }
+
+    static double maxWidth (void) {
+      return 2 * S + 2 * M;
     }
 
     QRectF boundingRect(void) const {
@@ -201,18 +205,12 @@ struct PTreeIntrospecter {
     QFont font;
     QFontMetrics metrics;
 
-    Border (double width, double height)
+    Border (double height)
       : height(height),
         pen(Qt::gray, 1, Qt::DashLine),
         font("Courrier", 20),
         metrics(font) {
 
-      shape.moveTo(0, height);
-      shape.lineTo(width, height);
-      setZValue(-2);
-    }
-
-    void toCircular (void) {
       double a = -.5 * M_PI;
       QPointF p = height * QPointF(cos(a), sin(a));
 
@@ -227,6 +225,8 @@ struct PTreeIntrospecter {
 
         legend << QPair(i, v * p);
       }
+
+      setZValue(-2);
     }
 
     QRectF boundingRect(void) const {
@@ -283,17 +283,22 @@ struct PTreeIntrospecter {
     }
   };
 
-  static auto totalSteps (const PT &pt) {
-    return pt._step;
+  static float spacing (void) {
+    return Node::maxWidth() / 2;
   }
 
   template <typename C>
   static void fillScene (const PT &pt, QGraphicsScene *scene, const C &config) {
-    addSpecies(nullptr, *pt._root, scene, config, pt._step);
+    uint step = pt.step();
+    double width = pt.width() * (Node::maxWidth() + spacing()) - spacing();
 
-    scene->setSceneRect(scene->itemsBoundingRect());
+    if (pt._root)
+      addSpecies(nullptr, *pt._root, scene, config, step);
 
-    scene->addItem(new Border(scene->width(), pt._step));
+    auto border = new Border(step);
+    scene->addItem(border);
+
+//    scene->setSceneRect(border->boundingRect());
   }
 
   template <typename C>

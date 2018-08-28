@@ -110,6 +110,8 @@ void PhylogenyViewer_base::update(uint step, bool save) {
     printTo(file);
   }
 
+  qDebug() << _scene->items().size() << " items";
+
   emit updatedMaxSurvival(step);
   QDialog::update();
 }

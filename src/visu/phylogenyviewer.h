@@ -33,6 +33,7 @@ public:
 signals:
   void updatedMaxSurvival (int v);
 
+  void treeStepped (uint step, const std::set<uint> &living);
   void newSpecies (uint sid);
   void genomeEntersEnveloppe (uint sid, uint gid);
   void genomeLeavesEnveloppe (uint sid, uint gid);
@@ -71,20 +72,30 @@ public:
   PhylogenyViewer(QWidget *parent, PTree &ptree, Config config)
     : PhylogenyViewer_base(parent, config), _ptree(ptree), callbacks(this) {
     _ptree.setCallbacks(&callbacks);
-    constructorDelegate(PTI::totalSteps(_ptree));
+
+    uint step = _ptree.step();
+    constructorDelegate(step);
+    build();
+  }
+
+  void build (void) {
+    PTI::fillScene(_ptree, _scene, _config);
+    makeFit(_config.autofit);
   }
 
   void update (bool save = false) override {
-    uint step = PTI::totalSteps(_ptree);
-    _scene->clear();
+//    uint step = PTI::totalSteps(_ptree);
+//    _scene->clear();
 
-    if (step >= 0) {
-      PTI::fillScene(_ptree, _scene, _config);
-      if (_config.circular)
-        PTI::toCircular(_scene);
+//    if (step >= 0) {
+//      PTI::fillScene(_ptree, _scene, _config);
+//      if (_config.circular)
+//        PTI::toCircular(_scene);
 
-      makeFit(_config.autofit);
-    }
+//      makeFit(_config.autofit);
+//    }
+
+    uint step = _ptree.step();
 
     PhylogenyViewer_base::update(step, save);
   }
@@ -98,17 +109,26 @@ private:
 
 template <typename GENOME>
 struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
+  using PT = phylogeny::PhylogenicTree<GENOME>;
+  using GID = typename PT::GID;
+  using SID = typename PT::SID;
+  using LivingSet = typename PT::LivingSet;
+
   Callbacks_t (gui::PhylogenyViewer_base *v) : viewer(v) {}
 
-  void onNewSpecies (uint sid) {
+  void onStepped (uint step, const LivingSet &living) {
+    emit viewer->treeStepped(step, living);
+  }
+
+  void onNewSpecies (SID sid) {
     emit viewer->newSpecies(sid);
   }
 
-  void onGenomeEntersEnveloppe (uint sid, uint gid) {
+  void onGenomeEntersEnveloppe (SID sid, GID gid) {
     emit viewer->genomeEntersEnveloppe(sid, gid);
   }
 
-  void onGenomeLeavesEnveloppe (uint sid, uint gid) {
+  void onGenomeLeavesEnveloppe (SID sid, GID gid) {
     emit viewer->genomeLeavesEnveloppe(sid, gid);
   }
 

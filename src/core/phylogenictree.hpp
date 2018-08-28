@@ -18,20 +18,27 @@ template <typename _GENOME> class PTreeIntrospecter;
 
 template <typename PT>
 struct Callbacks_t {
-  void onNewSpecies (uint sid);
-  void onGenomeEntersEnveloppe (uint sid, uint gid);
-  void onGenomeLeavesEnveloppe (uint sid, uint gid);
+  using GID = typename PT::GID;
+  using SID = typename PT::SID;
+  using LivingSet = typename PT::LivingSet;
+
+  void onStepped (uint step, const LivingSet &living);
+  void onNewSpecies (SID sid);
+  void onGenomeEntersEnveloppe (SID sid, GID gid);
+  void onGenomeLeavesEnveloppe (SID sid, GID gid);
 };
 
 template <typename GENOME>
 class PhylogenicTree {
+public:
   using GID = typename GENOME::CData::GID;
   using SID = uint;
 
   using Parent = typename GENOME::CData::Parent;
   static constexpr SID NoID = SID(-1);
 
-public:
+  using LivingSet = std::set<SID>;
+
   using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
 
   PhylogenicTree(void) {
@@ -45,9 +52,21 @@ public:
   void setCallbacks (Callbacks *c) const { _callbacks = c; }
   Callbacks* callbacks (void) {   return _callbacks; }
 
+  uint width (void) const {
+    return _nodes.size();
+  }
+
+  uint step (void) const {
+    return _step;
+  }
+
+  void setStep (uint step) {
+    _step = step;
+  }
+
   template <typename IT, typename F>
   void step (uint step, IT begin, IT end, F geneticID) {
-    std::set<SID> aliveSpecies;
+    LivingSet aliveSpecies;
     for (IT it = begin; it != end; ++it)
       aliveSpecies.insert(_idToSpecies.at(geneticID(*it)));
 
@@ -55,14 +74,15 @@ public:
       _nodes.at(sid)->data.lastAppearance = step;
 
     _step = step;
+    if (_callbacks) _callbacks->onStepped(step, aliveSpecies);
 
     if (PTreeConfig::DEBUG())
       std::cerr << _idToSpecies.size() << " id>species pairs stored" << std::endl;
   }
 
-  SID addGenome (int x, const GENOME &g) {
+  SID addGenome (const GENOME &g) {
     if (!g.hasParent(Parent::FATHER) || !g.hasParent(Parent::MOTHER))
-      return addGenome(x, g, _root);
+      return addGenome(g, _root);
 
     uint mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
          pSID = _idToSpecies.parentSID(g, Parent::FATHER);
@@ -70,13 +90,13 @@ public:
     assert(PTreeConfig::ignoreHybrids() || mSID == pSID);
     if (mSID != pSID) _hybrids++;
     if (mSID == pSID)
-      return addGenome(x, g, _nodes[mSID]);
+      return addGenome(g, _nodes[mSID]);
 
     else if (PTreeConfig::ignoreHybrids()) {
-      if (PTreeConfig::DEBUG())
+      if (PTreeConfig::DEBUG() >= 0)
         std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
 
-      return addGenome(x, g, _nodes[mSID]);
+      return addGenome(g, _nodes[mSID]);
 
     } else {
       assert(false);
@@ -87,12 +107,12 @@ public:
     return NoID;
   }
 
-  void delGenome (uint step, const GENOME &g) {
+  void delGenome (const GENOME &g) {
     auto sid = _idToSpecies.remove(g);
     if (PTreeConfig::DEBUG())
-      std::cerr << "New last appearance of species " << sid << " is " << step << std::endl;
+      std::cerr << "New last appearance of species " << sid << " is " << _step << std::endl;
 
-    _nodes[sid]->data.lastAppearance = step;
+    _nodes[sid]->data.lastAppearance = _step;
   }
 
   friend std::ostream& operator<< (std::ostream &os, const PhylogenicTree &pt) {
@@ -260,14 +280,14 @@ protected:
     return p;
   }
 
-  SID addGenome (int x, const GENOME &g, Node_ptr species) {
+  SID addGenome (const GENOME &g, Node_ptr species) {
     if (PTreeConfig::DEBUG())
       std::cerr << "Adding genome " << g.id() << " to species " << species->id << std::endl;
 
     DCCache dccache;
     // Compatible enough with current species
     if (matchesSpecies(g, species, dccache)) {
-      insertInto(_step,x, g, species, dccache, _callbacks);
+      insertInto(_step, g, species, dccache, _callbacks);
       _idToSpecies.insert(g.id(), species->id);
       return species->id;
     }
@@ -278,7 +298,7 @@ protected:
     // Belongs to subspecies ?
     for (Node_ptr &subspecies: species->children) {
       if (matchesSpecies(g, subspecies, dccache)) {
-        insertInto(_step,x, g, subspecies, dccache, _callbacks);
+        insertInto(_step, g, subspecies, dccache, _callbacks);
         _idToSpecies.insert(g.id(), subspecies->id);
         return subspecies->id;
       }
@@ -288,10 +308,9 @@ protected:
     if (PTreeConfig::simpleNewSpecies()) {
       Node_ptr subspecies = makeNode(species);
       subspecies->data.firstAppearance = _step;
-      subspecies->data.xmin = x;
-      subspecies->data.xmax = x;
       species->children.push_back(subspecies);
-      insertInto(_step, x, g, subspecies, dccache, _callbacks);
+
+      insertInto(_step, g, subspecies, dccache, _callbacks);
       _idToSpecies.insert(g.id(), subspecies->id);
       if (_callbacks)  _callbacks->onNewSpecies(subspecies->id);
       return subspecies->id;
@@ -320,7 +339,7 @@ protected:
     return matable >= PTreeConfig::similarityThreshold() * k;
   }
 
-  friend void insertInto (uint step, int x, const GENOME &g, Node_ptr species,
+  friend void insertInto (uint step, const GENOME &g, Node_ptr species,
                           const DCCache &dccache, Callbacks *callbacks) {
 
     const uint k = species->enveloppe.size();
@@ -398,8 +417,6 @@ protected:
 
     species->data.count++;
     species->data.lastAppearance = step;
-    species->data.xmin = std::min(species->data.xmin, x);
-    species->data.xmax = std::max(species->data.xmax, x);
   }
 
 // =============================================================================
