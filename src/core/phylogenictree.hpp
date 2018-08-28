@@ -28,6 +28,23 @@ struct Callbacks_t {
   void onGenomeLeavesEnveloppe (SID sid, GID gid);
 };
 
+struct SpeciesData {
+  uint firstAppearance;
+  uint lastAppearance;
+  uint count;
+
+  friend void to_json (nlohmann::json &j, const SpeciesData &d) {
+    j = {d.firstAppearance, d.lastAppearance, d.count};
+  }
+
+  friend void from_json (const nlohmann::json &j, SpeciesData &d) {
+    uint i=0;
+    d.firstAppearance = j[i++];
+    d.lastAppearance = j[i++];
+    d.count = j[i++];
+  }
+};
+
 template <typename GENOME>
 class PhylogenicTree {
 public:
@@ -147,26 +164,8 @@ protected:
   using Node_ptr = std::shared_ptr<Node>;
   struct Node {
     SID id;
+    SpeciesData data;
 
-    struct Data {
-      uint firstAppearance;
-      uint lastAppearance;
-      uint count;
-      int xmin, xmax;
-    } data;
-
-    friend void to_json (nlohmann::json &j, const Data &d) {
-      j = {d.firstAppearance, d.lastAppearance, d.count, d.xmin, d.xmax};
-    }
-
-    friend void from_json (const nlohmann::json &j, Data &d) {
-      uint i=0;
-      d.firstAppearance = j[i++];
-      d.lastAppearance = j[i++];
-      d.count = j[i++];
-      d.xmin = j[i++];
-      d.xmax = j[i++];
-    }
 
     Node *parent;
     std::vector<Node_ptr> children;

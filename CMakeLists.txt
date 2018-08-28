@@ -58,7 +58,8 @@ if (NOT CLUSTER_BUILD)
 
     add_library(apt-gui STATIC
         "src/visu/phylogenyviewer.h"
-        "src/visu/ptreeintrospecter.hpp"
+        "src/visu/ptgraphbuilder.h"
+        "src/visu/ptgraphbuilder.cpp"
         "src/visu/phylogenyviewer.cpp"
         "src/visu/graphicsviewzoom.h"
         "src/visu/graphicsviewzoom.cpp"

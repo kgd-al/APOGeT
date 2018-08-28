@@ -100,20 +100,14 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   setWindowTitle("Phenotypic tree");
 }
 
-void PhylogenyViewer_base::update(uint step, bool save) {
-  if (save) {
-    QString file;
+void PhylogenyViewer_base::render(uint step, QString filename) {
+  if (filename.isEmpty()) {
     QTextStream qss(&file);
     qss << "snapshots/ptree_step" << step << ".png";
     static int i=0;
-    qDebug() << "[" << i++ << "] saved " << file;
-    printTo(file);
+    qDebug() << "[" << i++ << "] saved " << filename;
   }
-
-  qDebug() << _scene->items().size() << " items";
-
-  emit updatedMaxSurvival(step);
-  QDialog::update();
+  printTo(filename);
 }
 
 void PhylogenyViewer_base::resizeEvent(QResizeEvent*) {
@@ -122,7 +116,10 @@ void PhylogenyViewer_base::resizeEvent(QResizeEvent*) {
 
 void PhylogenyViewer_base::updateMinSurvival(int v) {
   _config.minSurvival = v;
-  update();
+  update([v] (QGraphicsItem *item) {
+    if (Node *n = dynamic_cast<Node*>(item))
+      n->setVisible(n->survival() >= v);
+  });
 }
 
 void PhylogenyViewer_base::updateMinEnveloppe(int v) {

@@ -4,19 +4,19 @@
 #include <QDialog>
 #include <QGraphicsView>
 
-#include "ptreeintrospecter.hpp"
+#include "ptgraphbuilder.h"
 
 namespace gui {
 
 class PhylogenyViewer_base : public QDialog {
   Q_OBJECT
 protected:
-  using Config = phylogeny::ViewerConfig;
+  using Config = gui::ViewerConfig;
 public:
   PhylogenyViewer_base (QWidget *parent, Config config) : QDialog(parent), _config(config) {}
 
-  virtual void update (bool save = false) = 0;
-  void update (uint step, bool save);
+  virtual void update (void) = 0;
+  void render (uint step, QString filename);
 
   void resizeEvent(QResizeEvent *event);
 
@@ -25,8 +25,6 @@ public:
   }
 
 signals:
-  void updatedMaxSurvival (int v);
-
   void treeStepped (uint step, const std::set<uint> &living);
   void newSpecies (uint sid);
   void genomeEntersEnveloppe (uint sid, uint gid);
@@ -45,7 +43,7 @@ public slots:
   void printTo (QString filename);
 
 protected:
-  phylogeny::ViewerConfig _config;
+  Config _config;
 
   QGraphicsScene *_scene;
   QGraphicsView *_view;
@@ -77,21 +75,9 @@ public:
     makeFit(_config.autofit);
   }
 
-  void update (bool save = false) override {
-//    uint step = PTI::totalSteps(_ptree);
-//    _scene->clear();
-
-//    if (step >= 0) {
-//      PTI::fillScene(_ptree, _scene, _config);
-//      if (_config.circular)
-//        PTI::toCircular(_scene);
-
-//      makeFit(_config.autofit);
-//    }
-
+  void render (QString filename = "") const {
     uint step = _ptree.step();
-
-    PhylogenyViewer_base::update(step, save);
+    PhylogenyViewer_base::render(step, filename);
   }
 
 private:
