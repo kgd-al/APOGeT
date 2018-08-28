@@ -10,15 +10,9 @@ namespace gui {
 
 class PhylogenyViewer_base : public QDialog {
   Q_OBJECT
+protected:
+  using Config = phylogeny::ViewerConfig;
 public:
-  struct Config {
-    uint minSurvival;
-    float minEnveloppe;
-    bool showNames;
-    bool circular;
-    bool autofit;
-  };
-
   PhylogenyViewer_base (QWidget *parent, Config config) : QDialog(parent), _config(config) {}
 
   virtual void update (bool save = false) = 0;
@@ -51,7 +45,7 @@ public slots:
   void printTo (QString filename);
 
 protected:
-  Config _config;
+  phylogeny::ViewerConfig _config;
 
   QGraphicsScene *_scene;
   QGraphicsView *_view;

@@ -12,6 +12,14 @@
 
 namespace phylogeny {
 
+struct ViewerConfig {
+  uint minSurvival;
+  float minEnveloppe;
+  bool showNames;
+  bool circular;
+  bool autofit;
+};
+
 template <typename GENOME>
 struct PTreeIntrospecter {
   using PT = PhylogenicTree<GENOME>;
@@ -78,14 +86,10 @@ struct PTreeIntrospecter {
     QPainterPath _shape, _survivor;
     QPen _pen;
 
-    Path(Node *start, Node *end) : _start(start), _end(end) {
+    Path(Node *start, Node *end, const Cache &cache) : _start(start), _end(end) {
       _pen = QPen(Qt::darkGray, 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
       setZValue(-1);
 
-      _shape = linearShape();
-    }
-
-    void toCircular (double da, const QMap<uint, Node*> &pn2gn) {
       _shape = QPainterPath();
       _shape.setFillRule(Qt::WindingFill);
 
@@ -95,13 +99,13 @@ struct PTreeIntrospecter {
       double S = _end->survivor;
 
       const QPointF p = _end->scenePos();
-      double a1 = toPrimaryAngle(p, da);
+      double a1 = cache.polarCoordinate.toPrimaryAngle(p);
       double r = length(p);
 
       const QPointF p2 = p + (_end->node.data.lastAppearance - _end->node.data.firstAppearance) * QPointF(cos(a1), sin(a1));
 
       if (_start && (S || !PTreeConfig::winningPathOnly())) {
-        double a0 = toPrimaryAngle(_start->pos(), da);
+        double a0 = cache.polarCoordinate.toPrimaryAngle(_start->pos());
         QPainterPath &path = S ? _survivor : _shape;
         path.moveTo(p);
         path.arcTo(QRect(-r, -r, 2*r, 2*r), -qRadiansToDegrees(a1), qRadiansToDegrees(a1 - a0));
@@ -150,34 +154,8 @@ struct PTreeIntrospecter {
           .adjusted(-extra, -extra, extra, extra);
     }
 
-    QPainterPath linearShape (void) {
-      QPainterPath shape;
-      const QPointF p = _end->scenePos();
-
-      if (_start) {
-        shape.addEllipse(QPointF(_start->scenePos().x(), p.y()), Node::S/4, Node::S/4);
-        shape.moveTo(_start->scenePos().x(), p.y());
-        shape.lineTo(p.x(), p.y());
-      }
-
-      shape.moveTo(p.x(), p.y());
-      shape.lineTo(p.x(), _end->node.data.lastAppearance);
-      shape.addEllipse(QPointF(p.x(), _end->node.data.lastAppearance), Node::S/4, Node::S/4);
-      shape.setFillRule(Qt::WindingFill);
-
-      return shape;
-    }
-
     double length (const QPointF &p) {
       return sqrt(p.x()*p.x() + p.y()*p.y());
-    }
-
-    double toPrimaryAngle (const QPointF &p, double da) {
-      if (p.isNull()) return da;
-      double a = atan2(p.y(), p.x());
-      while (a < da) a += 2 * M_PI;
-      while (a > 2 * M_PI + da) a -= 2 * M_PI;
-      return a;
     }
 
     QPainterPath shape (void) const override {
@@ -287,13 +265,54 @@ struct PTreeIntrospecter {
     return Node::maxWidth() / 2;
   }
 
-  template <typename C>
-  static void fillScene (const PT &pt, QGraphicsScene *scene, const C &config) {
+  struct Cache {
+    const ViewerConfig &config;
+    const uint time;
+
+    QGraphicsScene *scene;
+
+    struct PolarCoordinates {
+      const double width, originalWidth;
+      const double phase;
+
+      uint nextX;
+
+      PolarCoordinates (double width, double ratio)
+        : width(ratio * width), originalWidth(width),
+          phase(-2 * M_PI * (.25 + (originalWidth + width) / (2 * width))),
+          nextX(0) {}
+
+      static float xCoord (uint i) {
+        return Node::maxWidth() + i * (spacing() + Node::maxWidth());
+      }
+
+      double toPrimaryAngle (const QPointF &p) {
+        if (p.isNull()) return phase;
+        double a = atan2(p.y(), p.x());
+        while (a < phase) a += 2 * M_PI;
+        while (a > 2 * M_PI + phase) a -= 2 * M_PI;
+        return a;
+      }
+
+      QPointF operator() (uint time) {
+        double a = 2 * M_PI * xCoord(nextX++) / width;
+        return time * QPointF(cos(a), sin(a));
+      }
+    } polarCoordinate;
+  };
+
+  static void fillScene (const PT &pt, QGraphicsScene *scene, const ViewerConfig &config) {
     uint step = pt.step();
-    double width = pt.width() * (Node::maxWidth() + spacing()) - spacing();
+    double width = Cache::PolarCoordinates::xCoord(pt.width());
+
+    Cache c {
+      config, step,
+      scene,
+      {width, 1.1}
+    };
 
     if (pt._root)
-      addSpecies(nullptr, *pt._root, scene, config, step);
+      addSpecies(nullptr, *pt._root, c);
 
     auto border = new Border(step);
     scene->addItem(border);
@@ -301,72 +320,65 @@ struct PTreeIntrospecter {
 //    scene->setSceneRect(border->boundingRect());
   }
 
-  template <typename C>
-  static bool addSpecies(Node *parent, const PN &n, QGraphicsScene *scene, const C &config, uint T) {
-    QString spacing;
-    const PN *p = &n;
-    while ((p = p->parent)) spacing += "  ";
-
+  static bool addSpecies(Node *parent, const PN &n, Cache &cache) {
     float survival = n.data.lastAppearance - n.data.firstAppearance;
     float size = n.enveloppe.size() / double(PTreeConfig::enveloppeSize());
 
-    if (survival < config.minSurvival)  return false;
-    if (size < config.minEnveloppe) return false;
+    bool survivor = (n.data.lastAppearance >= cache.time);
 
     QPointF pos;
-    if (parent) {
-      pos += QPointF(
-        parent->pos().x() + parent->subtree.width() + Node::M,
-        float(n.data.firstAppearance)
-      );
-    }
+    if (parent)
+      pos += cache.polarCoordinate(n.data.firstAppearance);
 
-    bool survivor = (n.data.lastAppearance >= T);
     Node *gn = new Node (pos, n);
     gn->setScale(size);
-    gn->setVisible(config.showNames);
 
-    scene->addItem(gn);
+    bool visible = cache.config.showNames;
+    visible &= (survival >= cache.config.minSurvival);
+    visible &= (size >= cache.config.minEnveloppe);
+    gn->setVisible(visible);
+
+    cache.scene->addItem(gn);
 
     for (auto it=n.children.rbegin(); it!=n.children.rend(); ++it)
-      survivor |= addSpecies(gn, *(*it), scene, config, T);
+      survivor |= addSpecies(gn, *(*it), cache);
 
     gn->survivor = survivor;
-    scene->addItem(new Path(parent, gn));
+    cache.scene->addItem(new Path(parent, gn));
 
     if (parent) parent->subtree = parent->subtree.united(gn->subtree);
     return survivor;
   }
 
-  static void toCircular(QGraphicsScene *scene) {
-    float originalWidth = scene->width();
-    float width = originalWidth * 1.1;
+//  static void toCircular(QGraphicsScene *scene) {
+//    float originalWidth = scene->width();
+//    float width = originalWidth * 1.1;
 
-    QMap<uint, Node*> pn2gn;
-    for (auto *i: scene->items())
-      if (Node *n = dynamic_cast<Node*>(i))
-        pn2gn[n->node.id] = n;
+//    QMap<uint, Node*> pn2gn;
+//    for (auto *i: scene->items())
+//      if (Node *n = dynamic_cast<Node*>(i))
+//        pn2gn[n->node.id] = n;
 
-    double da = -2 * M_PI * (.25 + (originalWidth + width) / (2 * width));
+//    double da = -2 * M_PI * (.25 + (originalWidth + width) / (2 * width));
 
-    for (auto *i: scene->items()) {
-      if (Node *n = dynamic_cast<Node*>(i)) {
-        QPointF pl = n->pos();
-        double a = da + 2 * M_PI * pl.x() / width;
-        double r = pl.y();
-        QPointF pc (r * cos(a), r * sin(a));
-        n->setPos(pc);
+//    for (auto *i: scene->items()) {
+//      if (Node *n = dynamic_cast<Node*>(i)) {
+//        QPointF pl = n->pos();
+//        double a = da + 2 * M_PI * pl.x() / width;
+//        double r = pl.y();
+//        QPointF pc (r * cos(a), r * sin(a));
+//        n->setPos(pc);
 
-      } else if (Path *p = dynamic_cast<Path*>(i)) {
-        p->toCircular(da, pn2gn);
+//      } else if (Path *p = dynamic_cast<Path*>(i)) {
+//        p->toCircular(da, pn2gn);
 
 
-      } else if (Border *b = dynamic_cast<Border*>(i)) {
-        b->toCircular();
-      }
-    }
-    scene->setSceneRect(scene->itemsBoundingRect());
-  }
+//      } else if (Border *b = dynamic_cast<Border*>(i)) {
+//        b->toCircular();
+//      }
+//    }
+//    scene->setSceneRect(scene->itemsBoundingRect());
+//  }
 };
 
 } // end of namespace phylogeny
