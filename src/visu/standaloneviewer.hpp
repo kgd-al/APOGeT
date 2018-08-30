@@ -65,16 +65,15 @@ int run(int argc, char *argv[]) {
   PTree pt = nlohmann::json::parse(utils::readAll(result["tree"].as<std::string>()));
   PViewer pv (nullptr, pt, config);
 
-  pv.setMinimumSize(500, 500);
-  pv.update();
+//  pv.update();
 
   if (outfile.isEmpty()) {
     pv.show();
+    pv.setMinimumSize(500, 500);
     return a.exec();
 
   } else {
     pv.printTo(outfile);
     return 0;
   }
-
 }

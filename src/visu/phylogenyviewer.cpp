@@ -48,9 +48,10 @@ auto makeSlider (int min, int max, O *object, F callback) {
 }
 
 void PhylogenyViewer_base::constructorDelegate(uint steps) {
-  _scene = new QGraphicsScene(this);
-  _view = new QGraphicsView(_scene, this);
-  _scene->setBackgroundBrush(Qt::transparent);
+  _items = {new QGraphicsScene(this), nullptr, nullptr, {}};
+
+  _view = new QGraphicsView(_items.scene, this);
+  _items.scene->setBackgroundBrush(Qt::transparent);
   _view->setRenderHint(QPainter::Antialiasing, true);
 //  _view->viewport()->setMinimumSize(512, 512);
   _view->setDragMode(QGraphicsView::ScrollHandDrag);
@@ -61,7 +62,9 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   QToolBar *toolbar = new QToolBar;
 
   QSlider *mSSlider = makeSlider(0, steps, this, &PhylogenyViewer_base::updateMinSurvival);
-  connect(this, &PhylogenyViewer_base::updatedMaxSurvival, mSSlider, &QSlider::setMaximum);
+  connect(this, &PhylogenyViewer_base::onTreeStepped, [mSSlider] (uint step, const auto &) {
+    mSSlider->setMaximum(step);
+  });
 
   QSlider *mESlider = makeSlider(0, 100, this, &PhylogenyViewer_base::updateMinEnveloppe);
 
@@ -73,10 +76,6 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   showNames->setChecked(_config.showNames);
   connect(showNames, &QCheckBox::toggled, this, &PhylogenyViewer_base::toggleShowNames);
 
-  QCheckBox *circular = new QCheckBox("Circular");
-  circular->setChecked(_config.circular);
-  connect(circular, &QCheckBox::toggled, this, &PhylogenyViewer_base::toggleCircular);
-
   QCheckBox *autofit = new QCheckBox("AutoFit");
   autofit->setChecked(_config.autofit);
   connect(autofit, &QCheckBox::toggled, this, &PhylogenyViewer_base::makeFit);
@@ -84,7 +83,6 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   toolbar->addWidget(mSSlider);
   toolbar->addWidget(mESlider);
   toolbar->addWidget(showNames);
-  toolbar->addWidget(circular);
   toolbar->addWidget(autofit);
   toolbar->addAction(print);
 
@@ -100,13 +98,12 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   setWindowTitle("Phenotypic tree");
 }
 
-void PhylogenyViewer_base::render(uint step, QString filename) {
-  if (filename.isEmpty()) {
-    QTextStream qss(&file);
-    qss << "snapshots/ptree_step" << step << ".png";
-    static int i=0;
-    qDebug() << "[" << i++ << "] saved " << filename;
-  }
+void PhylogenyViewer_base::render(uint step) {
+  QString filename;
+  QTextStream qss(&filename);
+  qss << "snapshots/ptree_step" << step << ".png";
+  static int i=0;
+  qDebug() << "[" << i++ << "] saved " << filename;
   printTo(filename);
 }
 
@@ -114,33 +111,61 @@ void PhylogenyViewer_base::resizeEvent(QResizeEvent*) {
   makeFit(_config.autofit);
 }
 
-void PhylogenyViewer_base::updateMinSurvival(int v) {
+
+// ============================================================================
+// == Config update
+// ============================================================================
+
+void PhylogenyViewer_base::updateMinSurvival(uint v) {
   _config.minSurvival = v;
-  update([v] (QGraphicsItem *item) {
-    if (Node *n = dynamic_cast<Node*>(item))
-      n->setVisible(n->survival() >= v);
+  updateNodes([this] (Node *n) {
+    n->setVisible(Node::MIN_SURVIVAL, n->survival() >= _config.minSurvival);
   });
+  updateLayout();
 }
 
 void PhylogenyViewer_base::updateMinEnveloppe(int v) {
   _config.minEnveloppe = v / 100.;
-  update();
+  updateNodes([this] (Node *n) {
+    n->setVisible(Node::MIN_FULLNESS, n->fullness() >= _config.minEnveloppe);
+  });
+  updateLayout();
 }
 
 void PhylogenyViewer_base::toggleShowNames(void) {
   _config.showNames = !_config.showNames;
-  update();
-}
-
-void PhylogenyViewer_base::toggleCircular(void) {
-  _config.circular = !_config.circular;
-  update();
+  updateNodes([this] (Node *n) {
+    n->setVisible(Node::SHOW_NAME, _config.showNames);
+  });
 }
 
 void PhylogenyViewer_base::makeFit(bool autofit) {
   _config.autofit = autofit;
-  if (_config.autofit)  _view->fitInView(_scene->sceneRect(), Qt::KeepAspectRatio);
+  if (_config.autofit)  _view->fitInView(_items.scene->sceneRect(), Qt::KeepAspectRatio);
 }
+
+// ============================================================================
+// == Phylogeny update
+// ============================================================================
+void PhylogenyViewer_base::treeStepped (uint step, const std::set<uint> &living) {
+  for (Node *n: _items.nodes) {
+    bool isAlive = (living.find(n->id) != living.end());
+    n->updateNode(isAlive, step);
+  }
+  _items.border->setHeight(step);
+  _items.scene->setSceneRect(_items.border->boundingRect());
+  makeFit(_config.autofit);
+}
+
+void PhylogenyViewer_base::genomeEntersEnveloppe (uint sid, uint) {
+  const uint K = PTreeConfig::enveloppeSize();
+  Node *n = _items.nodes.value(sid);
+  n->enveloppe = std::min(n->enveloppe + 1, K);
+  n->autoscale();
+}
+
+void PhylogenyViewer_base::genomeLeavesEnveloppe (uint, uint) {}
+
 
 void PhylogenyViewer_base::printTo (QString filename) {
   if (filename.isEmpty())
@@ -150,12 +175,12 @@ void PhylogenyViewer_base::printTo (QString filename) {
 
   int Scale = 2;
 
-  QPixmap pixmap (Scale * _scene->sceneRect().size().toSize());
+  QPixmap pixmap (Scale * _items.scene->sceneRect().size().toSize());
   pixmap.fill(Qt::transparent);
 
   QPainter painter(&pixmap);
   painter.setRenderHint(QPainter::Antialiasing);
-  _scene->render(&painter);
+  _items.scene->render(&painter);
   painter.end();
 
   pixmap.save(filename);

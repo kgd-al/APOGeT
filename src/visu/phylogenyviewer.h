@@ -15,8 +15,7 @@ protected:
 public:
   PhylogenyViewer_base (QWidget *parent, Config config) : QDialog(parent), _config(config) {}
 
-  virtual void update (void) = 0;
-  void render (uint step, QString filename);
+  void render (uint step);
 
   void resizeEvent(QResizeEvent *event);
 
@@ -25,16 +24,22 @@ public:
   }
 
 signals:
+  void onTreeStepped (uint step, const std::set<uint> &living);
+  void onNewSpecies (uint pid, uint sid);
+  void onGenomeEntersEnveloppe (uint sid, uint gid);
+  void onGenomeLeavesEnveloppe (uint sid, uint gid);
+
+public slots:
+  // Callbacks from PTree
   void treeStepped (uint step, const std::set<uint> &living);
-  void newSpecies (uint sid);
+//  void newSpecies (uint pid, uint sid);
   void genomeEntersEnveloppe (uint sid, uint gid);
   void genomeLeavesEnveloppe (uint sid, uint gid);
 
-public slots:
-  void updateMinSurvival (int v);
+  // Config update
+  void updateMinSurvival (uint v);
   void updateMinEnveloppe (int v);
   void toggleShowNames (void);
-  void toggleCircular (void);
   void makeFit (bool autofit);
 
   void print (void) {
@@ -45,10 +50,22 @@ public slots:
 protected:
   Config _config;
 
-  QGraphicsScene *_scene;
+  GUIItems _items;
   QGraphicsView *_view;
 
   void constructorDelegate (uint steps);
+
+  template <typename F>
+  void updateNodes (F f) {
+    for (Node *n: _items.nodes) f(n);
+  }
+
+  template <typename F>
+  void updateRoot (F f) {
+    f(_items.root);
+  }
+
+  virtual void updateLayout (void) = 0;
 };
 
 template <typename GENOME>
@@ -58,7 +75,7 @@ public:
   using PTCallbacks = typename PTree::Callbacks;
   friend PTCallbacks;
 
-  using PTI = phylogeny::PTreeIntrospecter<GENOME>;
+  using Builder = PTGraphBuilder;
 
   PhylogenyViewer(QWidget *parent, PTree &ptree) : PhylogenyViewer(parent, ptree, defaultConfig()) {}
   PhylogenyViewer(QWidget *parent, PTree &ptree, Config config)
@@ -67,22 +84,43 @@ public:
 
     uint step = _ptree.step();
     constructorDelegate(step);
+
     build();
   }
 
+  auto cache (void) {
+    return PTreeBuildingCache { _config, _ptree.step(), _items };
+  }
+
   void build (void) {
-    PTI::fillScene(_ptree, _scene, _config);
+    auto c = cache();
+    Builder::fillScene(_ptree, c);
+    Builder::updateLayout(_items);
     makeFit(_config.autofit);
   }
 
-  void render (QString filename = "") const {
-    uint step = _ptree.step();
-    PhylogenyViewer_base::render(step, filename);
+  void render (void) {
+    PhylogenyViewer_base::render(_ptree.step());
+  }
+
+public /*slots*/:
+  void newSpecies (uint pid, uint sid) {
+    auto c = cache();
+    Node *parent = (pid != PTree::NoID) ? _items.nodes[pid] : nullptr;
+    const auto &pn = *_ptree.nodeAt(sid);
+    Builder::addSpecies(parent, pn, c);
+    Builder::updateLayout(_items);
+    _items.border->setEmpty(false);
+    _view->update();
   }
 
 private:
   const PTree &_ptree;
   PTCallbacks callbacks;
+
+  void updateLayout (void) override {
+    Builder::updateLayout(_items);
+  }
 };
 
 } // end namespace gui
@@ -90,30 +128,36 @@ private:
 template <typename GENOME>
 struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
   using PT = phylogeny::PhylogenicTree<GENOME>;
+  using PV = gui::PhylogenyViewer<GENOME>;
+
   using GID = typename PT::GID;
   using SID = typename PT::SID;
   using LivingSet = typename PT::LivingSet;
 
-  Callbacks_t (gui::PhylogenyViewer_base *v) : viewer(v) {}
+  Callbacks_t (PV *v) : viewer(v) {}
 
   void onStepped (uint step, const LivingSet &living) {
-    emit viewer->treeStepped(step, living);
+    viewer->treeStepped(step, living);
+    emit viewer->onTreeStepped(step, living);
   }
 
-  void onNewSpecies (SID sid) {
-    emit viewer->newSpecies(sid);
+  void onNewSpecies (SID pid, SID sid) {
+    viewer->newSpecies(pid, sid);
+    emit viewer->onNewSpecies(pid, sid);
   }
 
   void onGenomeEntersEnveloppe (SID sid, GID gid) {
-    emit viewer->genomeEntersEnveloppe(sid, gid);
+    viewer->genomeEntersEnveloppe(sid, gid);
+    emit viewer->onGenomeEntersEnveloppe(sid, gid);
   }
 
   void onGenomeLeavesEnveloppe (SID sid, GID gid) {
-    emit viewer->genomeLeavesEnveloppe(sid, gid);
+    viewer->genomeLeavesEnveloppe(sid, gid);
+    emit viewer->onGenomeLeavesEnveloppe(sid, gid);
   }
 
 private:
-  gui::PhylogenyViewer_base *viewer;
+  PV *viewer;
 };
 
 #endif // PHYLOGENYVIEWER_H

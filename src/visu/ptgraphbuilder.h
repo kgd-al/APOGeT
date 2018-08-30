@@ -1,5 +1,5 @@
-#ifndef _PTREE_INTROSPECTER_HPP_
-#define _PTREE_INTROSPECTER_HPP_
+#ifndef _PT_GRAPH_BUILDER_HPP_
+#define _PT_GRAPH_BUILDER_HPP_
 
 #include <QGraphicsScene>
 #include <QGraphicsItem>
@@ -7,6 +7,10 @@
 #include <QTextStream>
 
 #include "../core/phylogenictree.hpp"
+
+
+#include <QDebug>
+
 
 namespace gui {
 
@@ -18,71 +22,97 @@ struct ViewerConfig {
   bool autofit;
 };
 
+struct GUIItems;
 struct PTreeBuildingCache {
   const ViewerConfig &config;
   const uint time;
 
-  QGraphicsScene *scene;
-
-  struct PolarCoordinates {
-    const double originalWidth, widthWithLegend;
-
-    ///< Also inverted to cope with Qt coordinate system
-    const double phase;
-
-    uint nextX;
-
-    PolarCoordinates (double width);
-    static float xCoord (uint i);
-    double toPrimaryAngle (const QPointF &p) const;
-    QPointF operator() (uint time);
-  } polarCoordinate;
+  GUIItems &items;
 };
 
+struct PolarCoordinates;
+
+struct Path;
 class Node : public QGraphicsItem {
-  bool _stillAlive;
+  bool _alive;
+  bool _onSurvivorPath;
 
 public:
+  enum Visibility {
+    SHOW_NAME = 1,
+    PARENT = 2,
+    MIN_SURVIVAL = 4,
+    MIN_FULLNESS = 8
+  };
+  Q_DECLARE_FLAGS(Visibilities, Visibility)
+  Visibilities visibilities;
+
   const uint id;
+  Node *parent;
 
   using Data = phylogeny::SpeciesData;
   const Data &data;
 
-  float fullness;
+  uint enveloppe;
   uint children;
 
+  Path *path;
+  QVector<Node*> subnodes;
+
   template <typename PN>
-  Node (const QPointF pos, const PN &n) : id(n.id), data(n.data) {
-    fullness = n.enveloppe.size() / PTreeConfig::enveloppeSize();
+  Node (Node *parent, const PN &n) : id(n.id), parent(parent), data(n.data) {
+    enveloppe = n.enveloppe.size();
     children = n.children.size();
 
-    setPos(pos);
-    updateTooltip();
+    _alive = false;
+    _onSurvivorPath = false;
+
+    autoscale();
   }
 
   void updateTooltip(void);
+  void autoscale (void);
 
   bool isStillAlive(uint time) const {
     return data.lastAppearance >= time;
   }
 
-  bool isStillAlive (void) const {
-    return _stillAlive;
+  bool alive (void) const {
+    return _alive;
   }
 
-  void setStillAlive (bool alive) {
-    _stillAlive = alive;
-    setZValue(_stillAlive ? 2 : 1);
+  bool onSurvivorPath (void) const {
+    return _onSurvivorPath;
   }
+
+  void updateNode (bool alive, uint time);
+
+  void setOnSurvivorPath (bool osp);
+
+  bool subtreeVisible (void) const {
+    static constexpr auto mask = (MIN_FULLNESS | MIN_SURVIVAL | PARENT);
+    return (visibilities & mask) == mask;
+  }
+
+  bool shouldPaint (void) const {
+    return visibilities | SHOW_NAME;
+  }
+
+  void setVisible (Visibility v, bool visible);
 
   uint survival (void) const {
     return data.lastAppearance - data.firstAppearance;
+  }
+
+  float fullness (void) const {
+    return float(enveloppe) / PTreeConfig::enveloppeSize();
   }
 
   QRectF boundingRect(void) const;
 
   void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*);
 };
+Q_DECLARE_OPERATORS_FOR_FLAGS(Node::Visibilities)
 
 struct Path : public QGraphicsItem {
   using Cache = PTreeBuildingCache;
@@ -91,12 +121,12 @@ struct Path : public QGraphicsItem {
   QPainterPath _shape, _survivor;
   QPen _pen;
 
-  Path(Node *start, Node *end, const Cache &cache);
+  Path(Node *start, Node *end);
+
+  void updatePath (void);
+  void updatePath (uint time);
 
   QRectF boundingRect() const;
-  double length (const QPointF &p) {
-    return sqrt(p.x()*p.x() + p.y()*p.y());
-  }
 
   QPainterPath shape (void) const override {
     return _shape.united(_survivor);
@@ -106,6 +136,7 @@ struct Path : public QGraphicsItem {
 };
 
 struct Border : public QGraphicsItem {
+  bool empty;
   double height;
   QPainterPath shape;
   QList<QPair<int, QPointF>> legend;
@@ -116,79 +147,91 @@ struct Border : public QGraphicsItem {
 
   Border (double height);
 
+  void setEmpty (bool empty) {
+    bool wasEmpty = this->empty;
+    this->empty = empty;
+    if (wasEmpty != empty) {
+      updateShape();
+      update();
+    }
+  }
+
+  void setHeight (double h) {
+    height = h;
+    updateShape();
+    update();
+  }
+
   QRectF boundingRect(void) const {
     return shape.boundingRect().adjusted(0, -metrics.ascent(), 0, 0);
   }
 
+  void updateShape (void);
+
   void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*);
 };
 
-} // end of namespace gui
+struct GUIItems {
+  QGraphicsScene *scene;
+  Border *border;
+  Node *root;
 
-namespace phylogeny {
+  QMap<uint, Node*> nodes;
+};
 
-template <typename GENOME>
-struct PTreeIntrospecter {
-  using PT = PhylogenicTree<GENOME>;
-  using PN = typename PT::Node;
+struct PTGraphBuilder {
+  using Config = ViewerConfig;
+  using Cache = PTreeBuildingCache;
+  using Coordinates = PolarCoordinates;
 
-  using Config = gui::ViewerConfig;
-  using Cache = gui::PTreeBuildingCache;
+  template <typename GENOME>
+  static void fillScene (const phylogeny::PhylogenicTree<GENOME> &pt, Cache &cache) {
+    if (auto root = pt.root())
+      addSpecies(nullptr, *root, cache);
 
+    cache.items.border = new Border(cache.time);
+    cache.items.scene->addItem(cache.items.border);
+    cache.items.border->setEmpty(bool(pt.root()));
 
-  static void fillScene (const PT &pt, QGraphicsScene *scene, const Config &config) {
-    uint step = pt.step();
-    double width = Cache::PolarCoordinates::xCoord(pt.width()-2);
-
-    Cache c {
-      config, step,
-      scene,
-      {width}
-    };
-
-    if (pt._root)
-      addSpecies(nullptr, *pt._root, c);
-
-    auto border = new gui::Border(step);
-    scene->addItem(border);
-
-    scene->setSceneRect(border->boundingRect());
+    cache.items.scene->setSceneRect(cache.items.border->boundingRect());
   }
 
-  static bool addSpecies(gui::Node *parent, const PN &n, Cache &cache) {
-    QPointF pos;
-    if (parent)
-      pos += cache.polarCoordinate(n.data.firstAppearance);
-
-    gui::Node *gn = new gui::Node (pos, n);
+  template <typename PN>
+  static bool addSpecies(Node *parent, const PN &n, Cache &cache) {
+    Node *gn = new Node (parent, n);
     uint survival = gn->survival();
     float fullness = gn->fullness();
     bool survivor = gn->isStillAlive(cache.time);
 
-    gn->setScale(fullness);
-
-    bool visible = cache.config.showNames;
-    visible &= (survival >= cache.config.minSurvival);
-    visible &= (fullness >= cache.config.minEnveloppe);
-    gn->setVisible(visible);
-
-    cache.scene->addItem(gn);
+    if (parent)
+          parent->subnodes.push_front(gn);
+    else  cache.items.root = gn;
+    cache.items.nodes[gn->id] = gn;
+    cache.items.scene->addItem(gn);
 
     for (auto it=n.children.rbegin(); it!=n.children.rend(); ++it)
       survivor |= addSpecies(gn, *(*it), cache);
 
-    gn->setStillAlive(survivor);
-    cache.scene->addItem(new gui::Path(parent, gn, cache));
+    auto gp = new gui::Path(parent, gn);
+    gn->path = gp;
+    cache.items.scene->addItem(gp);
+    gp->setVisible(gn->subtreeVisible());
+
+    gn->setVisible(Node::SHOW_NAME, cache.config.showNames);
+    gn->setVisible(Node::MIN_SURVIVAL, survival >= cache.config.minSurvival);
+    gn->setVisible(Node::MIN_FULLNESS, fullness >= cache.config.minEnveloppe);
+    gn->setVisible(Node::PARENT, parent ? parent->subtreeVisible() : true);
+    gn->updateNode(survivor, cache.time);
 
     return survivor;
   }
 
-  template <typename F>
-  static void update (QGraphicsScene *scene, F f) {
-    for (auto *i: scene->items()) f(i);
-  }
+  static void updateLayout (GUIItems &items);
+
+private:
+  static void updateLayout (Node *localRoot, PolarCoordinates &pc);
 };
 
-} // end of namespace phylogeny
+} // end of namespace gui
 
-#endif // _PTREE_INTROSPECTER_HPP_
+#endif // _PT_GRAPH_BUILDER_HPP_

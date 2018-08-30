@@ -14,8 +14,6 @@
 
 namespace phylogeny {
 
-template <typename _GENOME> class PTreeIntrospecter;
-
 template <typename PT>
 struct Callbacks_t {
   using GID = typename PT::GID;
@@ -23,7 +21,7 @@ struct Callbacks_t {
   using LivingSet = typename PT::LivingSet;
 
   void onStepped (uint step, const LivingSet &living);
-  void onNewSpecies (SID sid);
+  void onNewSpecies (SID pid, SID sid);
   void onGenomeEntersEnveloppe (SID sid, GID gid);
   void onGenomeLeavesEnveloppe (SID sid, GID gid);
 };
@@ -58,19 +56,28 @@ public:
 
   using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
 
+
   PhylogenicTree(void) {
     _nextNodeID = 0;
     _step = 0;
     _hybrids = 0;
-    _root = makeNode(nullptr);
+    _root = nullptr;
     _callbacks = nullptr;
   }
 
   void setCallbacks (Callbacks *c) const { _callbacks = c; }
   Callbacks* callbacks (void) {   return _callbacks; }
 
+  const auto& root (void) const {
+    return _root;
+  }
+
   uint width (void) const {
     return _nodes.size();
+  }
+
+  const auto& nodeAt (uint i) const {
+    return _nodes.at(i);
   }
 
   uint step (void) const {
@@ -98,6 +105,9 @@ public:
   }
 
   SID addGenome (const GENOME &g) {
+    if (!_root)
+      _root = makeNode(nullptr);
+
     if (!g.hasParent(Parent::FATHER) || !g.hasParent(Parent::MOTHER))
       return addGenome(g, _root);
 
@@ -145,8 +155,6 @@ public:
   }
 
 protected:
-  friend class PTreeIntrospecter<GENOME>;
-
   SID _nextNodeID;
 
   template <typename T>
@@ -165,7 +173,6 @@ protected:
   struct Node {
     SID id;
     SpeciesData data;
-
 
     Node *parent;
     std::vector<Node_ptr> children;
@@ -273,9 +280,15 @@ protected:
 
   Node_ptr makeNode (Node_ptr parent) {
     Node_ptr p = std::make_shared<Node>(_nextNodeID++, parent);
-    p->data.firstAppearance = 0;
-    p->data.count = 0;
+    p->data.firstAppearance = _step;
+    p->data.lastAppearance = _step;
+    p->data.count = 1;
+
     _nodes.push_back(p);
+
+    if (parent) parent->children.push_back(p);
+    if (_callbacks)  _callbacks->onNewSpecies(parent ? parent->id : NoID, p->id);
+
     return p;
   }
 
@@ -306,12 +319,9 @@ protected:
     // Need to create new species
     if (PTreeConfig::simpleNewSpecies()) {
       Node_ptr subspecies = makeNode(species);
-      subspecies->data.firstAppearance = _step;
-      species->children.push_back(subspecies);
 
       insertInto(_step, g, subspecies, dccache, _callbacks);
       _idToSpecies.insert(g.id(), subspecies->id);
-      if (_callbacks)  _callbacks->onNewSpecies(subspecies->id);
       return subspecies->id;
 
     } else {
@@ -424,7 +434,6 @@ protected:
 private:
   Node_ptr rebuildHierarchy(Node_ptr parent, const nlohmann::json &j) {
     Node_ptr n = makeNode(parent);
-    if (parent) parent->children.push_back(n);
 
     uint i=0;
     n->id = j[i++];
