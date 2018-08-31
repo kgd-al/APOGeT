@@ -63,9 +63,7 @@ int run(int argc, char *argv[]) {
   setlocale(LC_NUMERIC,"C");
 
   PTree pt = nlohmann::json::parse(utils::readAll(result["tree"].as<std::string>()));
-  PViewer pv (nullptr, pt, config);
-
-//  pv.update();
+  PViewer pv (nullptr, pt, QBoxLayout::LeftToRight, config);
 
   if (outfile.isEmpty()) {
     pv.show();

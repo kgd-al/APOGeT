@@ -33,6 +33,7 @@ struct PTreeBuildingCache {
 struct PolarCoordinates;
 
 struct Path;
+struct Timeline;
 class Node : public QGraphicsItem {
   bool _alive;
   bool _onSurvivorPath;
@@ -57,18 +58,23 @@ public:
   uint children;
 
   Path *path;
+  Timeline *timeline;
   QVector<Node*> subnodes;
 
   template <typename PN>
-  Node (Node *parent, const PN &n) : id(n.id), parent(parent), data(n.data) {
+  Node (Node *parent, const PN &n)
+    : id(n.id), parent(parent), data(n.data), path(nullptr), timeline(nullptr) {
+
     enveloppe = n.enveloppe.size();
     children = n.children.size();
 
     _alive = false;
-    _onSurvivorPath = false;
+    setOnSurvivorPath(false);
 
     autoscale();
   }
+
+  void invalidate (const QPointF &newPos);
 
   void updateTooltip(void);
   void autoscale (void);
@@ -85,7 +91,7 @@ public:
     return _onSurvivorPath;
   }
 
-  void updateNode (bool alive, uint time);
+  void updateNode (bool alive);
 
   void setOnSurvivorPath (bool osp);
 
@@ -115,22 +121,36 @@ public:
 Q_DECLARE_OPERATORS_FOR_FLAGS(Node::Visibilities)
 
 struct Path : public QGraphicsItem {
-  using Cache = PTreeBuildingCache;
-
   Node *_start, *_end;
-  QPainterPath _shape, _survivor;
-  QPen _pen;
+
+  QPainterPath _shape;
 
   Path(Node *start, Node *end);
 
-  void updatePath (void);
-  void updatePath (uint time);
+  void invalidatePath (void);
 
-  QRectF boundingRect() const;
+  QRectF boundingRect() const override;
 
   QPainterPath shape (void) const override {
-    return _shape.united(_survivor);
+    return _shape;
   }
+
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *);
+};
+
+struct Timeline : public QGraphicsItem {
+  Node *_node;
+  QPointF _points[3];
+
+  Timeline(Node *node);
+
+  void invalidatePath (void);
+
+  QRectF boundingRect() const {
+    return shape().boundingRect();
+  }
+
+  QPainterPath shape (void) const override;
 
   void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *);
 };
@@ -191,17 +211,19 @@ struct PTGraphBuilder {
 
     cache.items.border = new Border(cache.time);
     cache.items.scene->addItem(cache.items.border);
-    cache.items.border->setEmpty(bool(pt.root()));
+
+    cache.items.border->setEmpty(!bool(pt.root()));
+    cache.items.border->setHeight(pt.step());
 
     cache.items.scene->setSceneRect(cache.items.border->boundingRect());
   }
 
   template <typename PN>
-  static bool addSpecies(Node *parent, const PN &n, Cache &cache) {
+  static void addSpecies(Node *parent, const PN &n, Cache &cache) {
     Node *gn = new Node (parent, n);
     uint survival = gn->survival();
     float fullness = gn->fullness();
-    bool survivor = gn->isStillAlive(cache.time);
+    bool alive = gn->isStillAlive(cache.time);
 
     if (parent)
           parent->subnodes.push_front(gn);
@@ -209,21 +231,26 @@ struct PTGraphBuilder {
     cache.items.nodes[gn->id] = gn;
     cache.items.scene->addItem(gn);
 
-    for (auto it=n.children.rbegin(); it!=n.children.rend(); ++it)
-      survivor |= addSpecies(gn, *(*it), cache);
+    for (const auto &n_: n.children)
+      addSpecies(gn, *n_, cache);
 
-    auto gp = new gui::Path(parent, gn);
-    gn->path = gp;
-    cache.items.scene->addItem(gp);
-    gp->setVisible(gn->subtreeVisible());
+    if (parent) {
+      auto gp = new gui::Path(parent, gn);
+      gn->path = gp;
+      cache.items.scene->addItem(gp);
+      gp->setVisible(gn->subtreeVisible());
+    }
+
+    auto gt = new gui::Timeline(gn);
+    gn->timeline = gt;
+    cache.items.scene->addItem(gt);
+    gt->setVisible(gn->subtreeVisible());
 
     gn->setVisible(Node::SHOW_NAME, cache.config.showNames);
     gn->setVisible(Node::MIN_SURVIVAL, survival >= cache.config.minSurvival);
     gn->setVisible(Node::MIN_FULLNESS, fullness >= cache.config.minEnveloppe);
     gn->setVisible(Node::PARENT, parent ? parent->subtreeVisible() : true);
-    gn->updateNode(survivor, cache.time);
-
-    return survivor;
+    gn->updateNode(alive);
   }
 
   static void updateLayout (GUIItems &items);

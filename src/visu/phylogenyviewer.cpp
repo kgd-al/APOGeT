@@ -1,12 +1,13 @@
-#include <QVBoxLayout>
 #include <QGraphicsItem>
 #include <QStack>
 
 #include <QToolBar>
+#include <QLabel>
 #include <QSlider>
 #include <QCheckBox>
 
 #include <QStyle>
+#include <QStylePainter>
 #include <QStyleOptionSlider>
 #include <QToolTip>
 
@@ -20,9 +21,19 @@
 
 namespace gui {
 struct FancySlider : public QSlider {
-  FancySlider(Qt::Orientation orientation, QWidget * parent = 0) : QSlider(orientation, parent) {}
+  const QString label;
+  FancySlider(Qt::Orientation orientation, const QString &label)
+    : QSlider(orientation), label(label) {
+    toolTip();
+  }
 
-  void sliderChange(QAbstractSlider::SliderChange change) {
+  QString toolTip(void) {
+    QString tooltip = label + ": " + QString::number(value());
+    setToolTip(tooltip);
+    return tooltip;
+  }
+
+  void sliderChange(QAbstractSlider::SliderChange change) override {
     QSlider::sliderChange(change);
 
     if (change == QAbstractSlider::SliderValueChange) {
@@ -32,14 +43,16 @@ struct FancySlider : public QSlider {
       QRect sr = style()->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, this);
       QPoint bottomRightCorner = sr.bottomLeft();
 
-      QToolTip::showText(mapToGlobal( QPoint( bottomRightCorner.x(), bottomRightCorner.y() ) ), QString::number(value()), this);
+      QToolTip::showText(mapToGlobal( QPoint( bottomRightCorner.x(), bottomRightCorner.y() ) ),
+                         toolTip(), this);
     }
   }
 };
 
 template <typename O, typename F>
-auto makeSlider (int min, int max, O *object, F callback) {
-  QSlider *slider = new FancySlider(Qt::Horizontal);
+auto makeSlider (Qt::Orientation orientation, const QString label,
+                 int min, int max, O *object, F callback) {
+  QSlider *slider = new FancySlider(orientation, label);
   slider->setMinimum(min);
   slider->setMaximum(max);
   QObject::connect(slider, &QSlider::valueChanged, object, callback);
@@ -47,7 +60,7 @@ auto makeSlider (int min, int max, O *object, F callback) {
   return slider;
 }
 
-void PhylogenyViewer_base::constructorDelegate(uint steps) {
+void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) {
   _items = {new QGraphicsScene(this), nullptr, nullptr, {}};
 
   _view = new QGraphicsView(_items.scene, this);
@@ -57,16 +70,30 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   _view->setDragMode(QGraphicsView::ScrollHandDrag);
   _view->setBackgroundBrush(Qt::white);
 
-  QVBoxLayout *layout = new QVBoxLayout;
+  auto *layout = new QBoxLayout(direction);
+  Qt::Orientation orientation;
+  switch (direction) {
+  case Direction::LeftToRight:
+  case Direction::RightToLeft:
+    orientation = Qt::Vertical;
+    break;
 
-  QToolBar *toolbar = new QToolBar;
+  case Direction::TopToBottom:
+  case Direction::BottomToTop:
+    orientation = Qt::Horizontal;
+    break;
+  }
 
-  QSlider *mSSlider = makeSlider(0, steps, this, &PhylogenyViewer_base::updateMinSurvival);
+  QToolBar *toolbar = new QToolBar();
+  toolbar->setOrientation(orientation);
+
+  QSlider *mSSlider = makeSlider(orientation, "Min. survival",
+                                 0, steps, this, &PhylogenyViewer_base::updateMinSurvival);
   connect(this, &PhylogenyViewer_base::onTreeStepped, [mSSlider] (uint step, const auto &) {
     mSSlider->setMaximum(step);
   });
 
-  QSlider *mESlider = makeSlider(0, 100, this, &PhylogenyViewer_base::updateMinEnveloppe);
+  QSlider *mESlider = makeSlider(orientation, "Min. enveloppe", 0, 100, this, &PhylogenyViewer_base::updateMinEnveloppe);
 
   QAction *print = new QAction(style()->standardPixmap(QStyle::SP_DialogSaveButton), "Print", this);
   print->setShortcut(Qt::ControlModifier + Qt::Key_P);
@@ -80,8 +107,18 @@ void PhylogenyViewer_base::constructorDelegate(uint steps) {
   autofit->setChecked(_config.autofit);
   connect(autofit, &QCheckBox::toggled, this, &PhylogenyViewer_base::makeFit);
 
-  toolbar->addWidget(mSSlider);
-  toolbar->addWidget(mESlider);
+  if (orientation == Qt::Horizontal) {
+    toolbar->addWidget(mSSlider);
+    toolbar->addWidget(mESlider);
+  } else {
+    auto *holder = new QWidget;
+    auto *layout = new QHBoxLayout;
+    layout->addWidget(mSSlider);
+    layout->addWidget(mESlider);
+    holder->setLayout(layout);
+    toolbar->addWidget(holder);
+  }
+
   toolbar->addWidget(showNames);
   toolbar->addWidget(autofit);
   toolbar->addAction(print);
@@ -148,10 +185,8 @@ void PhylogenyViewer_base::makeFit(bool autofit) {
 // == Phylogeny update
 // ============================================================================
 void PhylogenyViewer_base::treeStepped (uint step, const std::set<uint> &living) {
-  for (Node *n: _items.nodes) {
-    bool isAlive = (living.find(n->id) != living.end());
-    n->updateNode(isAlive, step);
-  }
+  for (Node *n: _items.nodes)
+    n->updateNode(living.find(n->id) != living.end());
   _items.border->setHeight(step);
   _items.scene->setSceneRect(_items.border->boundingRect());
   makeFit(_config.autofit);

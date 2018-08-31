@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QGraphicsView>
+#include <QBoxLayout>
 
 #include "ptgraphbuilder.h"
 
@@ -12,6 +13,7 @@ class PhylogenyViewer_base : public QDialog {
   Q_OBJECT
 protected:
   using Config = gui::ViewerConfig;
+  using Direction = QBoxLayout::Direction;
 public:
   PhylogenyViewer_base (QWidget *parent, Config config) : QDialog(parent), _config(config) {}
 
@@ -53,7 +55,7 @@ protected:
   GUIItems _items;
   QGraphicsView *_view;
 
-  void constructorDelegate (uint steps);
+  void constructorDelegate (uint steps, Direction direction = Direction::LeftToRight);
 
   template <typename F>
   void updateNodes (F f) {
@@ -77,13 +79,14 @@ public:
 
   using Builder = PTGraphBuilder;
 
-  PhylogenyViewer(QWidget *parent, PTree &ptree) : PhylogenyViewer(parent, ptree, defaultConfig()) {}
-  PhylogenyViewer(QWidget *parent, PTree &ptree, Config config)
+  PhylogenyViewer(QWidget *parent, PTree &ptree,
+                  Direction direction = Direction::TopToBottom,
+                  Config config = defaultConfig())
     : PhylogenyViewer_base(parent, config), _ptree(ptree), callbacks(this) {
     _ptree.setCallbacks(&callbacks);
 
     uint step = _ptree.step();
-    constructorDelegate(step);
+    constructorDelegate(step, direction);
 
     build();
   }

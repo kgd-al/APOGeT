@@ -14,10 +14,14 @@ namespace gui {
 // == Constants
 // ============================================================================
 
+// == Legend ========================================================
+
 ///< Note that the coordinate system is inverted (y points downward)
 static constexpr float LEGEND_PHASE = -M_PI / 2;
 static constexpr float LEGEND_SPACE = M_PI / 12;
 static constexpr uint LEGEND_TICKS = 4;
+
+// == Nodes style ===================================================
 
 static constexpr float NODE_RADIUS = 10;
 static constexpr float NODE_MARGIN = 2;
@@ -25,6 +29,30 @@ static constexpr float NODE_SIZE = 2 * (NODE_RADIUS + NODE_MARGIN);
 static constexpr float NODE_SPACING = NODE_SIZE / 2;
 
 static constexpr float END_POINT_SIZE = NODE_RADIUS / 4;
+
+// == Z-values ======================================================
+static constexpr int NODE_SURVIVOR_LEVEL = 2;
+static constexpr int NODE_EXCTINCT_LEVEL = 1;
+
+static constexpr int PATHS_LEVEL = -1;
+static constexpr int TIMELINES_LEVEL = -2;
+static constexpr int BOUNDS_LEVEL = -10;
+
+// == Paint style ===================================================
+
+static constexpr float PATH_WIDTH = 2.5;
+
+static constexpr Qt::GlobalColor PATH_DEFAULT_COLOR = Qt::darkGray;
+static constexpr Qt::GlobalColor PATH_HIGHLIGHT_COLOR = Qt::red;
+
+static const QPen BASE_PEN (PATH_DEFAULT_COLOR, PATH_WIDTH,
+                            Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+
+static const QPen HIGH_PEN = [] {
+  QPen p = BASE_PEN;
+  p.setColor(PATH_HIGHLIGHT_COLOR);
+  return p;
+}();
 
 
 // ============================================================================
@@ -61,7 +89,8 @@ struct PolarCoordinates {
       nextX(0) {}
 
   QPointF operator() (uint time) {
-    double a = phase + 2. * M_PI * xCoord(nextX++) / widthWithLegend;
+    double a = phase;
+    if (widthWithLegend > 0)  a += 2. * M_PI * xCoord(nextX++) / widthWithLegend;
   //  qDebug() << "theta(" << nextX-1 << "): " << a * 180. / M_PI;
     return time * QPointF(cos(a), sin(a));
   }
@@ -74,6 +103,13 @@ struct PolarCoordinates {
 
 QRectF Node::boundingRect(void) const {
   return QRectF(-NODE_SIZE, -NODE_SIZE, 2*NODE_SIZE, 2*NODE_SIZE);
+}
+
+void Node::invalidate(const QPointF &newPos) {
+  setPos(newPos);
+  if (path) path->invalidatePath();
+  timeline->invalidatePath();
+  update();
 }
 
 void Node::updateTooltip (void) {
@@ -99,7 +135,8 @@ void Node::setVisible (Visibility v, bool visible) {
 
   if (v != SHOW_NAME) {
     visible = subtreeVisible();
-    path->setVisible(visible);
+    if (path) path->setVisible(visible);
+    timeline->setVisible(visible);
     QGraphicsItem::setVisible(visible);
     for (Node *n: subnodes)
       n->setVisible(PARENT, visible);
@@ -107,24 +144,23 @@ void Node::setVisible (Visibility v, bool visible) {
     update();
 }
 
-void Node::updateNode (bool alive, uint time) {
-  bool wasAlive = _alive;
+void Node::updateNode (bool alive) {
   _alive = alive;
 
-  Node *n = this;
-  do {
-    n->setOnSurvivorPath(true);
-    n = n->parent;
-  } while (n && !n->_onSurvivorPath);
+  if (_alive) {
+    Node *n = this;
+    do {
+      n->setOnSurvivorPath(true);
+      n = n->parent;
+    } while (n && !n->_onSurvivorPath);
+  }
 
-  if (wasAlive != _alive)
-    path->updatePath();
+  timeline->invalidatePath();
 }
 
 void Node::setOnSurvivorPath (bool osp) {
   _onSurvivorPath = osp;
-  setZValue(_onSurvivorPath ? 2 : 1);
-  qDebug() << "Species" << id << "on survivor path?" << _onSurvivorPath;
+  setZValue(_onSurvivorPath ? NODE_SURVIVOR_LEVEL : NODE_EXCTINCT_LEVEL);
 }
 
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
@@ -142,89 +178,98 @@ void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) 
 
 
 // ============================================================================
-// == Graph path
+// == Path between a parent and child node
 // ============================================================================
 
-Path::Path(Node *start, Node *end) : _start(start), _end(end) {
-  _pen = QPen(Qt::darkGray, 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-}
+Path::Path(Node *start, Node *end) : _start(start), _end(end) {}
 
-void Path::updatePath(void) {
+void Path::invalidatePath(void) {
   prepareGeometryChange();
 
   _shape = QPainterPath();
   _shape.setFillRule(Qt::WindingFill);
 
-  _survivor = QPainterPath();
-  _survivor.setFillRule(Qt::WindingFill);
+  double a0 = PolarCoordinates::primaryAngle(_start->pos());
 
-  double S = _end->alive();
-  setZValue(S ? -1 : -2);
+  const QPointF p1 = _end->scenePos();
+  double a1 = PolarCoordinates::primaryAngle(p1);
+  double r1 = PolarCoordinates::length(p1);
 
-  const QPointF p = _end->scenePos();
-  double a1 = PolarCoordinates::primaryAngle(p);
-  double r = PolarCoordinates::length(p);
-
-  const QPointF p2 = p + (_end->survival()) * QPointF(cos(a1), sin(a1));
-
-  if (_start && (S || !PTreeConfig::winningPathOnly())) {
-    double a0 = PolarCoordinates::primaryAngle(_start->pos());
-    QPainterPath &path = S ? _survivor : _shape;
-    path.moveTo(p);
-    path.arcTo(QRect(-r, -r, 2*r, 2*r), -qRadiansToDegrees(a1), qRadiansToDegrees(a1 - a0));
-    path.addEllipse(path.pointAtPercent(1), END_POINT_SIZE, END_POINT_SIZE);
-  }
-
-  QPointF p1 = p;
-  if (S) {
-//    double l = length(p);
-//    for (const auto &pn: _end->node.children) {
-//      if (pn2gn.find(pn->id) == pn2gn.end())  continue;
-
-//      Node *gn = pn2gn[pn->id];
-//      if (!gn->survivor)  continue;
-
-//      QPointF p_ = gn->pos();
-//      double l_ = length(p_);
-//      if (l < l_) {
-//        p1 = p_;
-//        l = l_;
-//      }
-//    }
-
-//    if (p1 == p) p1 = p2;
-//    else
-//      p1 = length(p1) * QPointF(cos(a1), sin(a1));
-
-//    assert(!_end->survivor || _end->node.children.empty() || p != p1);
-//    _survivor.moveTo(p);
-//    _survivor.lineTo(p1);
-  }
-
-  bool atEnd = PolarCoordinates::length(p1) < PolarCoordinates::length(p2);
-  if (!atEnd || !PTreeConfig::winningPathOnly()){
-    QPainterPath &path = atEnd ? _shape : _survivor;
-    path.moveTo(p1);
-    path.lineTo(p2);
-    path.addEllipse(p2, END_POINT_SIZE, END_POINT_SIZE);
-  }
+  _shape.moveTo(p1);
+  _shape.arcTo(QRect(-r1, -r1, 2*r1, 2*r1), -qRadiansToDegrees(a1), qRadiansToDegrees(a1 - a0));
+  _shape.addEllipse(_shape.pointAtPercent(1), END_POINT_SIZE, END_POINT_SIZE);
 }
 
 QRectF Path::boundingRect() const {
-  qreal extra = (_pen.width() + 20) / 2.0;
+  qreal extra = (PATH_WIDTH + 20) / 2.0;
 
   return shape().boundingRect().normalized()
       .adjusted(-extra, -extra, extra, extra);
 }
 
 void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
-  painter->setPen(_pen);
+  painter->setPen(_end->onSurvivorPath() ? HIGH_PEN : BASE_PEN);
   painter->drawPath(_shape);
+}
 
-  QPen pen (_pen);
-  pen.setColor(Qt::red);
-  painter->setPen(pen);
-  painter->drawPath(_survivor);
+
+// ============================================================================
+// == Timeline for a node
+// ============================================================================
+
+Timeline::Timeline(Node *node) : _node(node) {
+  setZValue(TIMELINES_LEVEL);
+}
+
+void Timeline::invalidatePath(void) {
+  prepareGeometryChange();
+
+  _points[0] = _node->scenePos();
+  double a = PolarCoordinates::primaryAngle(_points[0]);
+
+  _points[2] = _node->data.lastAppearance * QPointF(cos(a), sin(a));
+
+  if (_node->alive())
+    _points[1] = _points[2];
+
+  else if (!_node->onSurvivorPath())
+    _points[1] = _points[0];
+
+  else {
+    double l = _node->data.firstAppearance;
+    for (const Node *gn: _node->subnodes) {
+      if (!gn->onSurvivorPath())  continue;
+
+      double l_ = gn->data.firstAppearance;
+      if (l < l_) l = l_;
+    }
+
+    _points[1] = l * QPointF(cos(a), sin(a));
+  }
+}
+
+QPainterPath Timeline::shape (void) const {
+  QPainterPath path;
+  path.moveTo(_points[0]);
+  path.lineTo(_points[1]);
+  path.lineTo(_points[2]);
+  path.addEllipse(_points[2], END_POINT_SIZE, END_POINT_SIZE);
+  return QPainterPathStroker (BASE_PEN).createStroke(path);
+}
+
+void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
+  if (_points[0] != _points[1]) {
+    painter->setPen(HIGH_PEN);
+    painter->drawLine(_points[0], _points[1]);
+  }
+
+  if (_points[1] != _points[2]) {
+    painter->setPen(BASE_PEN);
+    painter->drawLine(_points[1], _points[2]);
+  }
+
+  painter->setBrush(painter->pen().color());
+  painter->drawEllipse(_points[2], END_POINT_SIZE, END_POINT_SIZE);
 }
 
 
@@ -238,6 +283,7 @@ Border::Border (double height)
     font("Courrier", 20),
     metrics(font) {
 
+  empty = (height == 0);
   updateShape();
   setZValue(-10);
 }
@@ -284,6 +330,7 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
       QList<QPair<QRectF, QString>> texts;
       QRegion clip (-height, -height, 2*height, 2*height);
 
+      // Compute legend values and clip-out text areas
       for (auto &p: legend) {
         double v = p.first / double(LEGEND_TICKS);
         double h = height * v;
@@ -294,6 +341,7 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
         texts << QPair(textRect, text);
       }
 
+      // Draw disks in reverse order (so that they overlap correctly)
       painter->save();
       painter->setPen(Qt::transparent);
       for (auto it=legend.rbegin(); it!=legend.rend(); ++it) {
@@ -308,15 +356,19 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
       }
       painter->restore();
 
+      // Draw 'axis'
       painter->save();
       painter->setBrush(Qt::transparent);
       painter->setClipRegion(clip);
       painter->drawPath(shape);
       painter->restore();
 
+      // Draw tic values
       for (auto &p: texts)
         painter->drawText(p.first, Qt::AlignCenter, p.second);
+
     } else {
+      // Just draw the 'pending' message
       painter->setBrush(Qt::gray);
       painter->drawPath(shape);
     }
@@ -330,9 +382,7 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
 
 void PTGraphBuilder::updateLayout (Node *localRoot, PolarCoordinates &pc) {
   if (localRoot->subtreeVisible()) {
-    localRoot->setPos(pc(localRoot->data.firstAppearance));
-    localRoot->path->updatePath();
-    localRoot->update();
+    localRoot->invalidate(pc(localRoot->data.firstAppearance));
 
     for (gui::Node *n: localRoot->subnodes)
       updateLayout(n, pc);
@@ -346,7 +396,7 @@ void PTGraphBuilder::updateLayout (GUIItems &items) {
   qDebug() << "Updating layout for" << visible << "items";
 
   if (visible > 0) {
-    double width = PolarCoordinates::xCoord(visible);
+    double width = PolarCoordinates::xCoord(visible-1);
     PolarCoordinates pc (width);
     updateLayout(items.root, pc);
   }
