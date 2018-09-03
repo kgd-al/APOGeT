@@ -4,24 +4,43 @@
 #include "kgd/settings/configfile.h"
 #include "kgd/settings/mutationbounds.hpp"
 
-DEFINE_PRETTY_ENUMERATION(
-  CrossoverDataMutations,
+/*!
+ * \file crossconfig.h
+ *
+ * Definitions for controlling the crossover process
+ */
+
+/// \enum CrossoverDataMutations
+/// Fields that should be mutated in the crossover data structure
+DEFINE_NAMESPACE_PRETTY_ENUMERATION(
+  config, CrossoverDataMutations,
     DISTANCE, INBREED, OUTBREED
 )
 
-#define CFILE CrossoverConfig
+namespace genotype {
+struct BOCData;
+}
+
+namespace config {
+
+#define CFILE Crossover
+
+/// Config file for the crossover algorithm
 struct CFILE : public ConfigFile<CFILE> {
-  template <typename T> using B = MutationSettings::B<T>;
+  using B = MutationSettings::Bounds<float, genotype::BOCData>;
   template <typename E> using MutationRates = MutationSettings::MutationRates<E>;
 
+  /// Probability of mutating a child after crossover
   DECLARE_PARAMETER(float, mutateChild)
 
-  DECLARE_PARAMETER(B<float>, optimalDistance)
-  DECLARE_PARAMETER(B<float>, inbreedTolerance)
-  DECLARE_PARAMETER(B<float>, outbreedTolerance)
+  DECLARE_PARAMETER(B, optimalDistance)
+  DECLARE_PARAMETER(B, inbreedTolerance)
+  DECLARE_PARAMETER(B, outbreedTolerance)
 
   DECLARE_PARAMETER(MutationRates<CrossoverDataMutations>, cdMutations)
 };
 #undef CFILE
+
+} // end of namespace config
 
 #endif // _CROSSOVER_CONFIG_HPP_

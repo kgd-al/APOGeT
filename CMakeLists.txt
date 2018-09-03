@@ -95,6 +95,26 @@ if(CLUSTER_BUILD)
 endif()
 
 ####################################################################################################
+## Make documentation
+####################################################################################################
+
+cmake_policy(SET CMP0057 NEW)
+find_package(Doxygen REQUIRED dot)
+
+set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/docs")
+set(DOXYGEN_INCLUDE_PATH "${tools_INCLUDE_DIRS}")
+set(DOXYGEN_MACRO_EXPANSION YES)
+#set(DOXYGEN_EXCLUDE_SYMBOLS "_details::deepmagic::*")
+set(DOXYGEN_GENERATE_TAGFILE "${DOXYGEN_OUTPUT_DIRECTORY}/apt.tag")
+set(DOXYGEN_TAGFILES "${tools_DOXYGEN}")
+
+set(DOXYGEN_ENABLED_SECTIONS "internal")
+set(DOXYGEN_EXTRACT_PRIVATE YES)
+
+doxygen_add_docs(docs ${SOURCES} COMMENT "Generating documentation")
+
+
+####################################################################################################
 ## Package info generation
 ####################################################################################################
 
@@ -103,17 +123,23 @@ install(TARGETS apt-core ${MAYBE_GUI}
     RUNTIME DESTINATION bin/kgd/apt
 )
 
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/"
-        DESTINATION include/kgd/apt
-        FILES_MATCHING
-            PATTERN "*.h"
+install(
+    DIRECTORY "${CMAKE_SOURCE_DIR}/src/"
+    DESTINATION include/kgd/apt
+    FILES_MATCHING
+        PATTERN "*.h"
         PERMISSIONS
             OWNER_EXECUTE OWNER_READ
             GROUP_EXECUTE GROUP_READ
-            PATTERN "*.hpp"
+        PATTERN "*.hpp"
         PERMISSIONS
             OWNER_EXECUTE OWNER_READ
             GROUP_EXECUTE GROUP_READ
+)
+
+install(
+    DIRECTORY "${CMAKE_SOURCE_DIR}/docs"
+    DESTINATION docs/apt
 )
 
 set(CONFIG "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake")
@@ -128,6 +154,10 @@ set(${PROJECT_NAME}_INCLUDE_DIRS
 
 set(${PROJECT_NAME}_LIBRARIES
     $<JOIN:${tools_LIBRARIES};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>;${GUI_LIB},
+    >)
+
+set(${PROJECT_NAME}_DOXYGEN
+    $<JOIN:${tools_DOXYGEN};${CMAKE_INSTALL_PREFIX}/docs/tools/apt.tag,
     >)\n"
 )
 install(FILES ${CONFIG} DESTINATION cmake)

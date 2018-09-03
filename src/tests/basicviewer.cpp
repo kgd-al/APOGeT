@@ -8,16 +8,17 @@ struct Genome {
   friend void from_json (const nlohmann::json&, Genome&) {}
 };
 
-#define CFILE BasicConfig
-struct BasicConfig : public ConfigFile<CFILE> {
-  DECLARE_SUBCONFIG(CrossoverConfig, crossoverConfig)
-  DECLARE_SUBCONFIG(PTreeConfig, phenotypicTreeConfig)
-
+namespace config {
+#define CFILE Basic
+struct Basic : public ConfigFile<CFILE> {
+  DECLARE_SUBCONFIG(Crossover, crossoverConfig)
+  DECLARE_SUBCONFIG(PTree, phenotypicTreeConfig)
 };
-DEFINE_SUBCONFIG(CrossoverConfig, crossoverConfig)
-DEFINE_SUBCONFIG(PTreeConfig, phenotypicTreeConfig)
+DEFINE_SUBCONFIG(Crossover, crossoverConfig)
+DEFINE_SUBCONFIG(PTree, phenotypicTreeConfig)
 #undef CFILE
+} // end of namespace config
 
 int main(int argc, char *argv[]) {
-  return run<Genome, BasicConfig>(argc, argv);
+  return run<Genome, config::Basic>(argc, argv);
 }

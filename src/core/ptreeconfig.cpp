@@ -1,6 +1,8 @@
 #include "ptreeconfig.h"
 
-#define CFILE PTreeConfig
+namespace config {
+
+#define CFILE PTree
 
 DEFINE_PARAMETER(double, compatibilityThreshold, .1)
 DEFINE_PARAMETER(double, similarityThreshold, .5)
@@ -11,5 +13,7 @@ DEFINE_PARAMETER(bool, ignoreHybrids, true)
 DEFINE_PARAMETER(bool, winningPathOnly, false)
 
 DEFINE_DEBUG_PARAMETER(int, DEBUG, 0)
+
+} // end of namespace config
 
 #undef CFILE

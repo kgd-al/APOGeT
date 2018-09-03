@@ -13,13 +13,14 @@ template <typename GENOME, typename CONFIG>
 int run(int argc, char *argv[]) {
   using PTree = phylogeny::PhylogenicTree<GENOME>;
   using PViewer = gui::PhylogenyViewer<GENOME>;
+  using Verbosity = config::Verbosity;
 
   cxxopts::Options options("PTreeViewer", "Loads and displays a phenotypic tree for \""
                            + utils::className<GENOME>() + "\" genomes");
   options.add_options()
     ("h,help", "Display help")
     ("c,config", "File containing configuration data", cxxopts::value<std::string>())
-    ("v,verbosity", "Verbosity level. " + verbosityValues(), cxxopts::value<Verbosity>())
+    ("v,verbosity", "Verbosity level. " + config::verbosityValues(), cxxopts::value<Verbosity>())
     ("minSurvival", "Minimal survival duration", cxxopts::value<uint>())
     ("minEnveloppe", "Minimal fullness for the enveloppe", cxxopts::value<float>())
     ("showNames", "Whether or not to show node names", cxxopts::value<bool>())

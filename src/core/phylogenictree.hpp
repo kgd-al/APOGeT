@@ -12,6 +12,12 @@
 #include "ptreeconfig.h"
 #include "kgd/external/json.hpp"
 
+/*!
+ * \file phylogenictree.hpp
+ *
+ * Contains the core classes for the phylogeny algorithms
+ */
+
 namespace phylogeny {
 
 template <typename PT>
@@ -55,7 +61,7 @@ public:
   using LivingSet = std::set<SID>;
 
   using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
-
+  using Config = config::PTree;
 
   PhylogenicTree(void) {
     _nextNodeID = 0;
@@ -100,7 +106,7 @@ public:
     _step = step;
     if (_callbacks) _callbacks->onStepped(step, aliveSpecies);
 
-    if (PTreeConfig::DEBUG())
+    if (Config::DEBUG())
       std::cerr << _idToSpecies.size() << " id>species pairs stored" << std::endl;
   }
 
@@ -114,20 +120,20 @@ public:
     uint mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
          pSID = _idToSpecies.parentSID(g, Parent::FATHER);
 
-    assert(PTreeConfig::ignoreHybrids() || mSID == pSID);
+    assert(Config::ignoreHybrids() || mSID == pSID);
     if (mSID != pSID) _hybrids++;
     if (mSID == pSID)
       return addGenome(g, _nodes[mSID]);
 
-    else if (PTreeConfig::ignoreHybrids()) {
-      if (PTreeConfig::DEBUG() >= 0)
+    else if (Config::ignoreHybrids()) {
+      if (Config::DEBUG() >= 0)
         std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
 
       return addGenome(g, _nodes[mSID]);
 
     } else {
       assert(false);
-      if (PTreeConfig::DEBUG())
+      if (Config::DEBUG())
         std::cerr << "Managing hybrid genome " << g.id() << std::endl;
     }
 
@@ -136,7 +142,7 @@ public:
 
   void delGenome (const GENOME &g) {
     auto sid = _idToSpecies.remove(g);
-    if (PTreeConfig::DEBUG())
+    if (Config::DEBUG())
       std::cerr << "New last appearance of species " << sid << " is " << _step << std::endl;
 
     _nodes[sid]->data.lastAppearance = _step;
@@ -293,7 +299,7 @@ protected:
   }
 
   SID addGenome (const GENOME &g, Node_ptr species) {
-    if (PTreeConfig::DEBUG())
+    if (Config::DEBUG())
       std::cerr << "Adding genome " << g.id() << " to species " << species->id << std::endl;
 
     DCCache dccache;
@@ -304,7 +310,7 @@ protected:
       return species->id;
     }
 
-    if (PTreeConfig::DEBUG())
+    if (Config::DEBUG())
       std::cerr << "\tIncompatible with " << species->id << std::endl;
 
     // Belongs to subspecies ?
@@ -317,7 +323,7 @@ protected:
     }
 
     // Need to create new species
-    if (PTreeConfig::simpleNewSpecies()) {
+    if (Config::simpleNewSpecies()) {
       Node_ptr subspecies = makeNode(species);
 
       insertInto(_step, g, subspecies, dccache, _callbacks);
@@ -341,11 +347,11 @@ protected:
       double d = distance(g, e);
       double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
 
-      if (c >= PTreeConfig::compatibilityThreshold()) matable++;
+      if (c >= Config::compatibilityThreshold()) matable++;
       dccache.push_back(d, c);
     }
 
-    return matable >= PTreeConfig::similarityThreshold() * k;
+    return matable >= Config::similarityThreshold() * k;
   }
 
   friend void insertInto (uint step, const GENOME &g, Node_ptr species,
@@ -353,14 +359,14 @@ protected:
 
     const uint k = species->enveloppe.size();
 
-    if (PTreeConfig::DEBUG())
+    if (Config::DEBUG())
       std::cerr << "\tCompatible with " << species->id << std::endl;
 
     auto &dist = species->distances;
 
     // Populate the enveloppe
-    if (species->enveloppe.size() < PTreeConfig::enveloppeSize()) {
-      if (PTreeConfig::DEBUG())  std::cerr << "\tAppend to the enveloppe" << std::endl;
+    if (species->enveloppe.size() < Config::enveloppeSize()) {
+      if (Config::DEBUG())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(g);
       if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id, g.id());
@@ -369,7 +375,7 @@ protected:
 
     // Better enveloppe point ?
     } else {
-      assert(k == PTreeConfig::enveloppeSize());
+      assert(k == Config::enveloppeSize());
 
       /// Find most similar current enveloppe point
       double minDistance = dccache.distances[0];
@@ -381,7 +387,7 @@ protected:
           closest = i;
         }
       }
-      if (PTreeConfig::DEBUG() >= 2)
+      if (Config::DEBUG() >= 2)
         std::cerr << "\t\tClosest to "
                   << closest
                   << " (id: " << species->enveloppe[closest].id()
@@ -391,7 +397,7 @@ protected:
       uint newIsBest = 0;
       for (uint i=0; i<k; i++) {
         if (i != closest) {
-          if (PTreeConfig::DEBUG() >= 2)
+          if (Config::DEBUG() >= 2)
             std::cerr << "\t\t" << i << "(" << species->enveloppe[i].id()
                       << "): " << dccache.distances[i] << " >? "
                       << dist[{i,closest}] << std::endl;
@@ -401,14 +407,14 @@ protected:
       }
 
       // Genome inside the enveloppe. Nothing to do
-      if (newIsBest < PTreeConfig::outperformanceThreshold() * (k-1)) {
-        if (PTreeConfig::DEBUG())
+      if (newIsBest < Config::outperformanceThreshold() * (k-1)) {
+        if (Config::DEBUG())
           std::cerr << "\tGenome deemed unremarkable with "
                     << k - 1 - newIsBest << " to " << newIsBest << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
-        if (PTreeConfig::DEBUG())
+        if (Config::DEBUG())
           std::cerr << "\tReplaced enveloppe point " << closest
                     << " with a vote of " << newIsBest << " to " << k - 1 - newIsBest
                     << std::endl;

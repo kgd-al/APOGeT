@@ -3,7 +3,9 @@
 
 #include "kgd/settings/configfile.h"
 
-#define CFILE PTreeConfig
+namespace config {
+
+#define CFILE PTree
 struct CFILE : public ConfigFile<CFILE> {
 
   /// Threshold for being considered a "viable mate"
@@ -25,5 +27,7 @@ struct CFILE : public ConfigFile<CFILE> {
   DECLARE_DEBUG_PARAMETER(int, DEBUG, 0)
 };
 #undef CFILE
+
+} // end of namespace config
 
 #endif // _P_TREE_CONFIG_H_

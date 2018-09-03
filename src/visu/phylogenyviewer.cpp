@@ -193,7 +193,7 @@ void PhylogenyViewer_base::treeStepped (uint step, const std::set<uint> &living)
 }
 
 void PhylogenyViewer_base::genomeEntersEnveloppe (uint sid, uint) {
-  const uint K = PTreeConfig::enveloppeSize();
+  const uint K = config::PTree::enveloppeSize();
   Node *n = _items.nodes.value(sid);
   n->enveloppe = std::min(n->enveloppe + 1, K);
   n->autoscale();

@@ -325,7 +325,7 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
   metrics = QFontMetrics(font);
   painter->setFont(font);
 
-  if (!PTreeConfig::winningPathOnly()) {
+  if (!config::PTree::winningPathOnly()) {
     if (height > 0) {
       QList<QPair<QRectF, QString>> texts;
       QRegion clip (-height, -height, 2*height, 2*height);

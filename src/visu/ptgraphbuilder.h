@@ -111,7 +111,7 @@ public:
   }
 
   float fullness (void) const {
-    return float(enveloppe) / PTreeConfig::enveloppeSize();
+    return float(enveloppe) / config::PTree::enveloppeSize();
   }
 
   QRectF boundingRect(void) const;
