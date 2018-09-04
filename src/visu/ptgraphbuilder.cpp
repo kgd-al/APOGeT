@@ -59,14 +59,18 @@ static const QPen HIGH_PEN = [] {
 // == Coordinate computation
 // ============================================================================
 
+/// Generates and manages polar coordinates for the nodes/paths
 struct PolarCoordinates {
-  ///< Also inverted to cope with Qt coordinate system
+
+  /// The angular phase used in coordinate computation.
+  /// Inverted to cope with Qt coordinate system.
   static constexpr float phase = LEGEND_PHASE + LEGEND_SPACE/2.;
 
-  const double originalWidth, widthWithLegend;
+  const double width; ///< Width of the graph (legend included)
 
-  uint nextX;
+  uint nextX; ///< X coordinate of the next node
 
+  /// \returns The angle for \p in the range [phase,2&pi;+phase]
   static double primaryAngle (const QPointF &p) {
     if (p.isNull()) return phase;
     double a = atan2(p.y(), p.x());
@@ -75,22 +79,25 @@ struct PolarCoordinates {
     return a;
   }
 
+  /// \returns The euclidian distance of \p p with the origin
   static double length (const QPointF &p) {
     return sqrt(p.x()*p.x() + p.y()*p.y());
   }
 
+  /// \returns the coordinate of node number \p i
   static float xCoord (uint i) {
     return i * NODE_SIZE + (i > 0 ? i-1 : 0) * NODE_SPACING;
   }
 
+  /// Creates a polar coordinates object with the specified unscaled \p width
   PolarCoordinates (double width)
-    : originalWidth(width),
-      widthWithLegend(2 * M_PI * width / (2 * M_PI - LEGEND_SPACE)),
+    : width(2 * M_PI * width / (2 * M_PI - LEGEND_SPACE)),
       nextX(0) {}
 
+  /// \returns the position of the next point
   QPointF operator() (uint time) {
     double a = phase;
-    if (widthWithLegend > 0)  a += 2. * M_PI * xCoord(nextX++) / widthWithLegend;
+    if (width > 0)  a += 2. * M_PI * xCoord(nextX++) / width;
   //  qDebug() << "theta(" << nextX-1 << "): " << a * 180. / M_PI;
     return time * QPointF(cos(a), sin(a));
   }
@@ -109,7 +116,6 @@ void Node::invalidate(const QPointF &newPos) {
   setPos(newPos);
   if (path) path->invalidatePath();
   timeline->invalidatePath();
-  update();
 }
 
 void Node::updateTooltip (void) {
@@ -134,19 +140,22 @@ void Node::setVisible (Visibility v, bool visible) {
   visibilities.setFlag(v, visible);
 
   if (v != SHOW_NAME) {
+    // Update own visibility as well as related paths'
     visible = subtreeVisible();
     if (path) path->setVisible(visible);
     timeline->setVisible(visible);
     QGraphicsItem::setVisible(visible);
+
+    // Propagate to children
     for (Node *n: subnodes)
       n->setVisible(PARENT, visible);
-  } else
-    update();
+  }
 }
 
 void Node::updateNode (bool alive) {
   _alive = alive;
 
+  // Notify hierarchy
   if (_alive) {
     Node *n = this;
     do {
@@ -229,13 +238,14 @@ void Timeline::invalidatePath(void) {
 
   _points[2] = _node->data.lastAppearance * QPointF(cos(a), sin(a));
 
-  if (_node->alive())
+  if (_node->alive()) // Survivor timeline goes all the way
     _points[1] = _points[2];
 
-  else if (!_node->onSurvivorPath())
+  else if (!_node->onSurvivorPath())  // No survivor part for this path
     _points[1] = _points[0];
 
   else {
+    // Compute location of last child survivor
     double l = _node->data.firstAppearance;
     for (const Node *gn: _node->subnodes) {
       if (!gn->onSurvivorPath())  continue;

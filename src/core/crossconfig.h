@@ -25,7 +25,7 @@ namespace config {
 
 #define CFILE Crossover
 
-/// Config file for the crossover algorithm
+/// Config file for the crossover algorithms
 struct CFILE : public ConfigFile<CFILE> {
 
   /// Handy alias for the bounds type

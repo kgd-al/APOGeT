@@ -36,6 +36,8 @@
  * The default zoom factor base is 1.0015.
  */
 class Graphics_view_zoom : public QObject {
+  /// \cond third_party
+
   Q_OBJECT
 public:
   Graphics_view_zoom(QGraphicsView* view);
@@ -52,5 +54,7 @@ private:
 
 signals:
   void zoomed();
+
+  /// \endcond
 };
 #endif // GRAPHICSVIEWZOOM_H

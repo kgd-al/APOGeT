@@ -103,38 +103,45 @@ endif()
 ## Make documentation
 ################################################################################
 
+option(GENERATE_HELP "Whether or not to build the help through doxygen" OFF)
+message(STATUS "Help generation is " ${GENERATE_HELP})
 
-cmake_policy(SET CMP0057 NEW)
-find_package(Doxygen REQUIRED dot)
+if (GENERATE_HELP)
+    cmake_policy(SET CMP0057 NEW)
+    find_package(Doxygen REQUIRED dot)
 
-set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/docs")
+    set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/docs")
 
-# Doxygen needs to see the included files as well (e.g. macros)
-set(DOXYGEN_INCLUDE_PATH "${tools_INCLUDE_DIRS}")
+    # Doxygen needs to see the included files as well (e.g. macros)
+    set(DOXYGEN_INCLUDE_PATH "${tools_INCLUDE_DIRS}")
 
-# Do expand macros for I may have used some...
-set(DOXYGEN_MACRO_EXPANSION YES)
+    # Do expand macros for I may have used some...
+    set(DOXYGEN_MACRO_EXPANSION YES)
 
-# Ignore generated moc files
-set(DOXYGEN_EXCLUDE_PATTERNS "*moc_*")
+    # Ignore generated moc files
+    set(DOXYGEN_EXCLUDE_PATTERNS "*moc_*")
 
-# Dot not look into the abyss
-set(DOXYGEN_EXCLUDE_SYMBOLS "_details::deepmagic::*"
-                            "CFILE")
+    # Dot not look into the abyss
+    set(DOXYGEN_EXCLUDE_SYMBOLS "_details::deepmagic::*"
+                                "CFILE")
 
-# Usefull ?
-set(DOXYGEN_GENERATE_TAGFILE "${DOXYGEN_OUTPUT_DIRECTORY}/apt.tag")
-set(DOXYGEN_TAGFILES "${tools_DOXYGEN}")
+    # Qt help
+    set(DOXYGEN_GENERATE_QHP YES)
+    set(DOXYGEN_QCH_FILE "../apt.qch")
+    set(DOXYGEN_QHP_NAMESPACE "kgd.apt")
+    set(DOXYGEN_QHP_VIRTUAL_FOLDER "kgd_docs")
+    set(DOXYGEN_QHG_LOCATION "qhelpgenerator")
 
-# Debugging
-set(DOXYGEN_ENABLED_SECTIONS "internal")
-set(DOXYGEN_EXTRACT_PRIVATE YES)
+    # Debugging
+    set(DOXYGEN_ENABLED_SECTIONS "internal")
+    set(DOXYGEN_EXTRACT_PRIVATE YES)
 
-doxygen_add_docs(docs ${SOURCES} COMMENT "Generating documentation")
+    doxygen_add_docs(docs ${SOURCES} COMMENT "Generating documentation")
+endif()
 
 
 ################################################################################
-## Package info generation
+## Package info generation / installation
 ################################################################################
 
 install(TARGETS apt-core ${MAYBE_GUI}
@@ -156,10 +163,12 @@ install(
             GROUP_EXECUTE GROUP_READ
 )
 
-install(
-    DIRECTORY "${CMAKE_SOURCE_DIR}/docs"
-    DESTINATION docs/apt
-)
+if (GENERATE_HELP)
+    install(
+        DIRECTORY "${CMAKE_SOURCE_DIR}/docs/"
+        DESTINATION docs/apt
+    )
+endif()
 
 set(CONFIG "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake")
 file(GENERATE
@@ -173,10 +182,6 @@ set(${PROJECT_NAME}_INCLUDE_DIRS
 
 set(${PROJECT_NAME}_LIBRARIES
     $<JOIN:${tools_LIBRARIES};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>;${GUI_LIB},
-    >)
-
-set(${PROJECT_NAME}_DOXYGEN
-    $<JOIN:${tools_DOXYGEN};${CMAKE_INSTALL_PREFIX}/docs/tools/apt.tag,
     >)\n"
 )
 install(FILES ${CONFIG} DESTINATION cmake)

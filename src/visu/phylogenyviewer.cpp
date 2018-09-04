@@ -19,20 +19,34 @@
 #include "phylogenyviewer.h"
 #include "graphicsviewzoom.h"
 
+/*!
+ * \file phylogenyviewer.cpp
+ *
+ * Contains the implementation of the base phylogeny viewer
+ */
+
 namespace gui {
+
+/// Wrapper for a slider with a floating current value indicator
 struct FancySlider : public QSlider {
+
+  /// The prefix used for displaying the current value
   const QString label;
+
+  /// Create a fancy slider with given \p orientation and prefix \p label
   FancySlider(Qt::Orientation orientation, const QString &label)
     : QSlider(orientation), label(label) {
     toolTip();
   }
 
+  /// Update the current tooltip based on the #label and slider's current value
   QString toolTip(void) {
     QString tooltip = label + ": " + QString::number(value());
     setToolTip(tooltip);
     return tooltip;
   }
 
+  /// Intercepted to provide a floating tooltip displaying the current value
   void sliderChange(QAbstractSlider::SliderChange change) override {
     QSlider::sliderChange(change);
 
@@ -49,6 +63,7 @@ struct FancySlider : public QSlider {
   }
 };
 
+/// Helper template generating a parametered slider in one neat one-liner
 template <typename O, typename F>
 auto makeSlider (Qt::Orientation orientation, const QString label,
                  int min, int max, O *object, F callback) {
@@ -61,15 +76,17 @@ auto makeSlider (Qt::Orientation orientation, const QString label,
 }
 
 void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) {
+  // Create cache
   _items = {new QGraphicsScene(this), nullptr, nullptr, {}};
 
+  // Create view
   _view = new QGraphicsView(_items.scene, this);
   _items.scene->setBackgroundBrush(Qt::transparent);
   _view->setRenderHint(QPainter::Antialiasing, true);
-//  _view->viewport()->setMinimumSize(512, 512);
   _view->setDragMode(QGraphicsView::ScrollHandDrag);
   _view->setBackgroundBrush(Qt::white);
 
+  // Create layout
   auto *layout = new QBoxLayout(direction);
   Qt::Orientation orientation;
   switch (direction) {
@@ -84,29 +101,36 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
     break;
   }
 
+  // Create components
   QToolBar *toolbar = new QToolBar();
   toolbar->setOrientation(orientation);
 
+  // Survival slider
   QSlider *mSSlider = makeSlider(orientation, "Min. survival",
                                  0, steps, this, &PhylogenyViewer_base::updateMinSurvival);
   connect(this, &PhylogenyViewer_base::onTreeStepped, [mSSlider] (uint step, const auto &) {
     mSSlider->setMaximum(step);
   });
 
+  // Enveloppe slider
   QSlider *mESlider = makeSlider(orientation, "Min. enveloppe", 0, 100, this, &PhylogenyViewer_base::updateMinEnveloppe);
 
+  // Print action
   QAction *print = new QAction(style()->standardPixmap(QStyle::SP_DialogSaveButton), "Print", this);
   print->setShortcut(Qt::ControlModifier + Qt::Key_P);
   connect(print, &QAction::triggered, this, &PhylogenyViewer_base::print);
 
+  // Show names checkbox
   QCheckBox *showNames = new QCheckBox("Show names");
   showNames->setChecked(_config.showNames);
   connect(showNames, &QCheckBox::toggled, this, &PhylogenyViewer_base::toggleShowNames);
 
+  // Autofit checkbox
   QCheckBox *autofit = new QCheckBox("AutoFit");
   autofit->setChecked(_config.autofit);
   connect(autofit, &QCheckBox::toggled, this, &PhylogenyViewer_base::makeFit);
 
+  // Position widgets with respect to the orientation
   if (orientation == Qt::Horizontal) {
     toolbar->addWidget(mSSlider);
     toolbar->addWidget(mESlider);
@@ -119,6 +143,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
     toolbar->addWidget(holder);
   }
 
+  // Populate the rest of the toolbar
   toolbar->addWidget(showNames);
   toolbar->addWidget(autofit);
   toolbar->addAction(print);

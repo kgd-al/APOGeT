@@ -6,6 +6,8 @@
 
 #include "graphicsviewzoom.h"
 
+/// \cond third_party
+
 Graphics_view_zoom::Graphics_view_zoom(QGraphicsView* view)
   : QObject(view), _view(view) {
   _view->viewport()->installEventFilter(this);
@@ -55,3 +57,5 @@ bool Graphics_view_zoom::eventFilter(QObject *object, QEvent *event) {
   Q_UNUSED(object)
   return false;
 }
+
+/// \endcond

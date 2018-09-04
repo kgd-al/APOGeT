@@ -7,78 +7,160 @@
 
 #include "ptgraphbuilder.h"
 
+/*!
+ * \file phylogenyviewer.h
+ *
+ * Contains definition for the phylogeny top-level viewer
+ */
+
 namespace gui {
 
+/// Base class for the phylogeny viewer. No template just the common functions,
+/// signals and slots.
 class PhylogenyViewer_base : public QDialog {
   Q_OBJECT
 protected:
-  using Config = gui::ViewerConfig;
-  using Direction = QBoxLayout::Direction;
-public:
-  PhylogenyViewer_base (QWidget *parent, Config config) : QDialog(parent), _config(config) {}
 
+  /// Configuration data controlling what to draw and how
+  using Config = gui::ViewerConfig;
+
+  /// The direction in which to layout components
+  using Direction = QBoxLayout::Direction;
+
+public:
+  /// Create a phylogeny viewer with given \p parent and using \p config as
+  /// its initial configuration
+  PhylogenyViewer_base (QWidget *parent, Config config)
+    : QDialog(parent), _config(config) {}
+
+  /// Render the tree to file
   void render (uint step);
 
+  /// Intercepted to allow for tree autofitting
   void resizeEvent(QResizeEvent *event);
 
-  static Config defaultConfig (void) {
-    return { 0, 0, true, true, true };
+  /// \return the default configuration
+  static auto defaultConfig (void) {
+    return Config{};
   }
 
 signals:
+  /// \brief Emitted when the tree is stepped
+  /// \copydetails phylogeny::Callbacks_t::onStepped
   void onTreeStepped (uint step, const std::set<uint> &living);
+
+  /// Emitted when a species has been added to the tree
+  /// \copydetails phylogeny::Callbacks_t::onNewSpecies
   void onNewSpecies (uint pid, uint sid);
+
+  /// Emitted when a species' enveloppe has changed
+  /// \copydetails phylogeny::Callbacks_t::onGenomeEntersEnveloppe
   void onGenomeEntersEnveloppe (uint sid, uint gid);
+
+  /// Emitted when a species has been added to the tree
+  /// \copydetails phylogeny::Callbacks_t::onGenomeLeavesEnveloppe
   void onGenomeLeavesEnveloppe (uint sid, uint gid);
 
-public slots:
+protected slots:
+  // ===========================================================================
   // Callbacks from PTree
+
+  /// Process a step event (new timestamp/living species)
   void treeStepped (uint step, const std::set<uint> &living);
+
+  /// Move to template version (need to provide the node)
 //  void newSpecies (uint pid, uint sid);
+
+  /// Process a enveloppe change event
   void genomeEntersEnveloppe (uint sid, uint gid);
+
+  /// \copydoc genomeEntersEnveloppe
   void genomeLeavesEnveloppe (uint sid, uint gid);
 
+  // ===========================================================================
   // Config update
+
+  /// Called when the corresponding slider's value has been changed
   void updateMinSurvival (uint v);
+
+  /// \copydoc updateMinSurvival
   void updateMinEnveloppe (int v);
+
+  /// Called when the corresponding checkbox has been changed
   void toggleShowNames (void);
+
+public slots:
+  /// Requests the scale of the view to be adapted to the size of the scene
   void makeFit (bool autofit);
 
+  /// Prints the current scene to an image file (with file selection dialog)
   void print (void) {
     printTo("");
   }
+
+  /// Prints the current scene to the image file \p filename
   void printTo (QString filename);
 
 protected:
+  /// The graphics config
   Config _config;
 
+  /// Cache data for all graphics items managed by this viewer
   GUIItems _items;
+
+  /// The view in which the graphics items reside
   QGraphicsView *_view;
 
-  void constructorDelegate (uint steps, Direction direction = Direction::LeftToRight);
+  /// Constructor delegate called by template instantiations
+  void constructorDelegate (uint steps,
+                            Direction direction = Direction::LeftToRight);
 
+  /// Apply function \p f to all of the scene's current nodes
   template <typename F>
   void updateNodes (F f) {
     for (Node *n: _items.nodes) f(n);
   }
 
+  /// Apply function \p f starting from the scene's root node.
+  /// \attention The recursivity (or lack thereof) is left to the caller's
+  /// discretion
   template <typename F>
   void updateRoot (F f) {
     f(_items.root);
   }
 
+  /// Called when the nodes/paths position must be changed radically (e.g.
+  /// new species inserted or visibility criterion modified)
   virtual void updateLayout (void) = 0;
 };
 
+/// \brief Instantiable phylogeny viewer for type \p GENOME.
+///
+/// This class can be used as a standalone (top-level) viewer or be embedded in
+/// any kind of layout. It is possible to control the orientation of the controls
+/// with respect to the main view.
 template <typename GENOME>
 class PhylogenyViewer : public PhylogenyViewer_base {
 public:
+
+  /// Helper alias to the PTree visualized
   using PTree = phylogeny::PhylogenicTree<GENOME>;
+
+  /// Helper alias to the callbacks type used by the PTree
   using PTCallbacks = typename PTree::Callbacks;
+
+  /// These need priviliged access
   friend PTCallbacks;
 
+  /// Helper alias for the graph builder
   using Builder = PTGraphBuilder;
 
+  /// Build a phylogeny viewer with given parameters
+  ///
+  /// \param parent The dialog's parent (can be null)
+  /// \param ptree The tree of which this object is a view
+  /// \param direction The layout direction
+  /// \param config The initial configuration
   PhylogenyViewer(QWidget *parent, PTree &ptree,
                   Direction direction = Direction::TopToBottom,
                   Config config = defaultConfig())
@@ -91,10 +173,12 @@ public:
     build();
   }
 
+  /// Helper function for getting a tree building cache
   auto cache (void) {
     return PTreeBuildingCache { _config, _ptree.step(), _items };
   }
 
+  /// Request full parsing of the associated PTree for a complete graph generation
   void build (void) {
     auto c = cache();
     Builder::fillScene(_ptree, c);
@@ -102,11 +186,13 @@ public:
     makeFit(_config.autofit);
   }
 
+  /// Requests the base class to render the current view
   void render (void) {
     PhylogenyViewer_base::render(_ptree.step());
   }
 
-public /*slots*/:
+public:
+  /// Process a new species event (add a new node to the graph)
   void newSpecies (uint pid, uint sid) {
     auto c = cache();
     Node *parent = (pid != PTree::NoID) ? _items.nodes[pid] : nullptr;
@@ -118,7 +204,10 @@ public /*slots*/:
   }
 
 private:
+  /// The PTree associated to this view
   const PTree &_ptree;
+
+  /// The callbacks used by #_ptree
   PTCallbacks callbacks;
 
   void updateLayout (void) override {
@@ -128,38 +217,67 @@ private:
 
 } // end namespace gui
 
+/// \brief Specialization of the callbacks for a PTree with parameter \p GENOME.
+///
+/// Forwards events to the viewer.
 template <typename GENOME>
 struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
+  /// The PTree type at the source of these callbacks
   using PT = phylogeny::PhylogenicTree<GENOME>;
+
+  /// The PViewer type receiving these forwarded events
   using PV = gui::PhylogenyViewer<GENOME>;
 
+  /// Helper alias to a genomic identificator
   using GID = typename PT::GID;
+
+  /// Helper alias to a species identificator
   using SID = typename PT::SID;
+
+  /// Helper alias to a collection of still-alive species
   using LivingSet = typename PT::LivingSet;
 
+  /// Creates a callback object associated with a specific viewer
   Callbacks_t (PV *v) : viewer(v) {}
 
+  /// Notify both the viewer and the outside world that the associated tree has
+  /// been stepped
+  ///
+  /// \copydetails phylogeny::Callbacks_t::onStepped
   void onStepped (uint step, const LivingSet &living) {
     viewer->treeStepped(step, living);
     emit viewer->onTreeStepped(step, living);
   }
 
+  /// Notify both the viewer and the outside world that a new species has been
+  /// added to the associated tree
+  ///
+  /// \copydetails phylogeny::Callbacks_t::onNewSpecies
   void onNewSpecies (SID pid, SID sid) {
     viewer->newSpecies(pid, sid);
     emit viewer->onNewSpecies(pid, sid);
   }
 
+  /// Notify both the viewer and the outside world that a species of the associated
+  /// tree has changed
+  ///
+  /// \copydetails phylogeny::Callbacks_t::onGenomeEntersEnveloppe
   void onGenomeEntersEnveloppe (SID sid, GID gid) {
     viewer->genomeEntersEnveloppe(sid, gid);
     emit viewer->onGenomeEntersEnveloppe(sid, gid);
   }
 
+  /// Notify both the viewer and the outside world that a species of the associated
+  /// tree has changed
+  ///
+  /// \copydetails phylogeny::Callbacks_t::onGenomeLeavesEnveloppe
   void onGenomeLeavesEnveloppe (SID sid, GID gid) {
     viewer->genomeLeavesEnveloppe(sid, gid);
     emit viewer->onGenomeLeavesEnveloppe(sid, gid);
   }
 
 private:
+  /// The associated viewer
   PV *viewer;
 };
 

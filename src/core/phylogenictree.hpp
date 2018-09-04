@@ -36,20 +36,24 @@ struct Callbacks_t {
   /// Alias to the collection of still-alive species id
   using LivingSet = typename PT::LivingSet;
 
-  /// Called when the pPTree has been stepped
+  /// \brief Called when the PTree has been stepped.
+  ///
   /// Provides the current step and the set of still-alive species
   void onStepped (uint step, const LivingSet &living);
 
-  /// Called to notify of a newly created species
+  /// \brief Called to notify of a newly created species.
+  ///
   /// Provides the identificators of both parent (if any) and new species
   void onNewSpecies (SID pid, SID sid);
 
-  /// Called when a genome is added to an enveloppe
+  /// \brief Called when a genome is added to an enveloppe.
+  ///
   /// Provides the id of the species whose enveloppe just changed and the id
   /// of the newly inserted genome
   void onGenomeEntersEnveloppe (SID sid, GID gid);
 
-  /// Called when a genome is removed from an enveloppe
+  /// \brief Called when a genome is removed from an enveloppe.
+  ///
   /// Provides the id of the species whose enveloppe just changed and the id
   /// of the newly removed genome
   void onGenomeLeavesEnveloppe (SID sid, GID gid);
@@ -155,6 +159,9 @@ public:
 
   /// Update the set of still-alive species based on the list of still-alive
   /// genomes [\p begin,\p end[ extracted through \p geneticID
+  ///
+  /// Callbacks:
+  ///   - Callbacks_t::onStepped
   ///
   /// \tparam IT Iterator to the begin/end of the population list
   /// \tparam F Functor for extracting the genome id from an iterator
@@ -416,6 +423,9 @@ protected:
   uint _step; ///< Current timestep for this tree
 
   /// Create a smart pointer to a node created on-the-fly under \p parent
+  /// Callbacks:
+  ///   - Callbacks_t::onNewSpecies
+
   Node_ptr makeNode (Node_ptr parent) {
     Node_ptr p = std::make_shared<Node>(_nextNodeID++, parent);
     p->data.firstAppearance = _step;
@@ -488,8 +498,11 @@ protected:
     return matable >= Config::similarityThreshold() * k;
   }
 
-  /// Insert \p g into node \p species,
-  /// possibly changing the enveloppe and generating callbacks
+  /// Insert \p g into node \p species, possibly changing the enveloppe.
+  ///
+  /// Callbacks:
+  ///   - Callbacks_t::onGenomeEntersEnveloppe
+  ///   - Callbacks_t::onGenomeLeavesEnveloppe
   friend void insertInto (uint step, const GENOME &g, Node_ptr species,
                           const DCCache &dccache, Callbacks *callbacks) {
 

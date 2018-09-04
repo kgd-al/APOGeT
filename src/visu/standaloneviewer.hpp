@@ -24,7 +24,6 @@ int run(int argc, char *argv[]) {
     ("minSurvival", "Minimal survival duration", cxxopts::value<uint>())
     ("minEnveloppe", "Minimal fullness for the enveloppe", cxxopts::value<float>())
     ("showNames", "Whether or not to show node names", cxxopts::value<bool>())
-    ("circular", "Whether or not to render a circular p-tree", cxxopts::value<bool>())
     ("p,print", "Render p-tree into 'filename'", cxxopts::value<std::string>())
     ("t,tree", "File containing the phenotypic tree [MANDATORY]", cxxopts::value<std::string>())
     ;
@@ -55,7 +54,6 @@ int run(int argc, char *argv[]) {
   if (result.count("minSurvival"))  config.minSurvival = result["minSurvival"].as<uint>();
   if (result.count("minEnveloppe"))  config.minEnveloppe = result["minEnveloppe"].as<float>();
   if (result.count("showNames"))  config.showNames = result["showNames"].as<bool>();
-  if (result.count("circular"))  config.circular = result["circular"].as<bool>();
 
   QString outfile;
   if (result.count("print"))  outfile = QString::fromStdString(result["print"].as<std::string>());
