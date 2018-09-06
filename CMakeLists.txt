@@ -99,6 +99,21 @@ if(CLUSTER_BUILD)
     add_definitions(-DCLUSTER_BUILD)
 endif()
 
+option(WITH_DEBUG_INFO "Sets whether to maximize debug data collection" OFF)
+message(STATUS "With debug info " ${WITH_DEBUG_INFO})
+if(WITH_DEBUG_INFO)
+    add_definitions(-DWITH_DEBUG_INFO)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g") # Enable debug info
+
+    # Enable small memory error detector (fuse=gold fixes linker errors)
+#    set(ASAN "-fsanitize=thread")
+    set(ASAN "-fsanitize=address -fsanitize=undefined")
+    set(CMAKE_CXX_FLAGS "${ASAN} -fno-omit-frame-pointer -fuse-ld=gold ${CMAKE_CXX_FLAGS}")
+endif()
+
+option(BUILD_TESTS "Sets whether to build the tests executables" OFF)
+message(STATUS "Build tests " ${BUILD_TESTS})
+
 ################################################################################
 ## Make documentation
 ################################################################################
@@ -133,8 +148,11 @@ if (GENERATE_HELP)
     set(DOXYGEN_QHG_LOCATION "qhelpgenerator")
 
     # Debugging
-    set(DOXYGEN_ENABLED_SECTIONS "internal")
-    set(DOXYGEN_EXTRACT_PRIVATE YES)
+    if (CMAKE_BUILD_TYPE MATCHES Debug)
+        message(STATUS "Enabling full documentation")
+        set(DOXYGEN_ENABLED_SECTIONS "internal")
+        set(DOXYGEN_EXTRACT_PRIVATE YES)
+    endif()
 
     doxygen_add_docs(docs ${SOURCES} COMMENT "Generating documentation")
 endif()
