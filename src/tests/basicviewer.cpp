@@ -20,16 +20,18 @@ struct Genome {
 };
 
 namespace config {
-#define CFILE Basic
 /// Bare-bones configuration file. Placeholder for coreconfig
-struct Basic : public ConfigFile<CFILE> {
+struct CONFIG_FILE(Basic) {
+  using BOCConfig = SAGConfigFile<genotype::BOCData>;
+
   /// Reference to the parameters for the crossover algorithms
-  DECLARE_SUBCONFIG(Crossover, crossoverConfig)
+  DECLARE_SUBCONFIG(BOCConfig, crossoverConfig)
 
   /// Reference to the parameters for the phylogenic algorithms
   DECLARE_SUBCONFIG(PTree, phenotypicTreeConfig)
 };
-DEFINE_SUBCONFIG(Crossover, crossoverConfig)
+#define CFILE Basic
+DEFINE_SUBCONFIG(CFILE::BOCConfig, crossoverConfig)
 DEFINE_SUBCONFIG(PTree, phenotypicTreeConfig)
 #undef CFILE
 } // end of namespace config

@@ -7,7 +7,7 @@
 
 #include "kgd/external/json.hpp"
 
-#include "crossconfig.h"
+#include "kgd/genotype/selfawaregenome.hpp"
 
 /*!
  * \file crossover.hpp
@@ -18,16 +18,7 @@
 namespace genotype {
 
 /// Common crossover control data
-class BOCData {
-  /// Helper alias to the enumeration of possible mutations
-  using CDM = config::CrossoverDataMutations;
-
-  /// Helper alias to the configuration values
-  using Config = config::Crossover;
-
-  /// The configuration need privileged access to this structure's fields
-  friend Config;
-
+class SELF_AWARE_GENOME(BOCData) {
   /// The compatibility function. Half of an unnormalized gaussian.
   double gaussoid (double x, double mu, double sigma) const {
     return exp(-((x-mu)*(x-mu)/(2.*sigma*sigma)));
@@ -37,13 +28,13 @@ class BOCData {
   // == Compatibility function
 
   /// Genetic distance that maximises reproduction compatibility
-  float optimalDistance;
+  DECLARE_GENOME_FIELD(float, optimalDistance)
 
   /// Standard deviation for distances below optimal
-  float inbreedTolerance;
+  DECLARE_GENOME_FIELD(float, inbreedTolerance)
 
   /// Standard deviation for distances above optimal
-  float outbreedTolerance;
+  DECLARE_GENOME_FIELD(float, outbreedTolerance)
 
 public:
   /// The possible sexs
@@ -123,17 +114,7 @@ public:
   }
 
   // ========================================================================
-  // == Genetic operators
-
-  /// Mutate a single field of this object base on the mutation rates and bounds
-  /// in #config::Crossover
-  void mutate (rng::AbstractDice &dice) {
-    switch (dice.pickOne(Config::cdMutations())) {
-    case CDM::DISTANCE: Config::optimalDistance().mutate(*this, dice); break;
-    case CDM::INBREED:  Config::inbreedTolerance().mutate(*this, dice); break;
-    case CDM::OUTBREED: Config::outbreedTolerance().mutate(*this, dice); break;
-    }
-  }
+  // == Specific genetic operators
 
   /// Updates internal data to reflect the clone status of the associated genome
   void updateCloneLineage (GID parent, rng::AbstractDice &dice) {
@@ -144,23 +125,11 @@ public:
     generation++;
   }
 
-  /// Compute the genetic distance for this structure
-  friend double distance (const BOCData &lhs, const BOCData &rhs) {
-    double d = 0;
-    d += Config::optimalDistance().distance(lhs, rhs);
-    d += Config::inbreedTolerance().distance(lhs, rhs);
-    d += Config::outbreedTolerance().distance(lhs, rhs);
-    return d;
-  }
-
   /// Cross genetic material of both parent to create a new one
   /// Also update internal data (id, parents, generation)
-  friend BOCData crossover (const BOCData &lhs, const BOCData &rhs,
-                            rng::AbstractDice &dice) {
-    BOCData child;
-    dice.toss(lhs, rhs, child, &BOCData::optimalDistance);
-    dice.toss(lhs, rhs, child, &BOCData::inbreedTolerance);
-    dice.toss(lhs, rhs, child, &BOCData::outbreedTolerance);
+  friend BOCData cross (const BOCData &lhs, const BOCData &rhs,
+                        rng::AbstractDice &dice) {
+    BOCData child = SelfAwareGenome<BOCData>::cross(lhs, rhs, dice);
     dice.toss(lhs, rhs, child, &BOCData::sex);
 
     child.id = nextID();
@@ -172,12 +141,9 @@ public:
   }
 
   /// \return a randomly generated structure according to the bounds in
-  ///  #config::Crossover
+  ///  #config::BOCData
   static BOCData random (rng::AbstractDice &dice) {
-    BOCData d;
-    d.optimalDistance = Config::optimalDistance().rand(dice);
-    d.inbreedTolerance = Config::inbreedTolerance().rand(dice);
-    d.outbreedTolerance = Config::outbreedTolerance().rand(dice);
+    BOCData d = SelfAwareGenome<BOCData>::random(dice);
     d.sex = Sex(dice(.5));
 
     d.id = nextID();
@@ -243,6 +209,37 @@ public:
   }
 };
 
+} // end of namespace genotype
+
+namespace config {
+
+/// Config file for the crossover algorithms
+template <> struct SAG_CONFIG_FILE(BOCData) {
+  using Bf = Bounds<float>;
+
+  /// Probability of mutating a child after crossover
+  DECLARE_PARAMETER(float, mutateChild)
+
+  /// Mutation bounds for the optimal genetic distance
+  /// \see genotype::BOCData::optimalDistance
+  DECLARE_PARAMETER(Bf, optimalDistance)
+
+  /// Mutation bounds for the inbreed tolerance
+  /// \see genotye::BOCData::inbreedTolerance
+  DECLARE_PARAMETER(Bf, inbreedTolerance)
+
+  /// Mutation bounds for the outbreed tolerance
+  /// \see genotype::BOCData::outbreedTolerance
+  DECLARE_PARAMETER(Bf, outbreedTolerance)
+
+  /// Mutation rates for the BOCData fields
+  DECLARE_PARAMETER(MutationRates, cdMutations)
+};
+
+} // end of namespace config
+
+namespace genotype {
+
 /// Crossing of \p mother and \p father.
 /// The algorithm is:
 ///   - Compute the alignment between \p mother and \p father
@@ -277,13 +274,13 @@ bool bailOutCrossver (const GENOME &mother, const GENOME &father,
 
   if (dice(compat)) {
     child = crossover(mother, father, dice, alg);
-    if (dice(config::Crossover::mutateChild())) child.mutate(dice);
+    if (dice(config::SAGConfigFile<BOCData>::mutateChild())) child.mutate(dice);
     return true;
   }
 
   return false;
 }
 
-} // end of namespace genotype
+} // end of namespace genotype (again)
 
 #endif // _CROSSOVER_HPP_

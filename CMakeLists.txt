@@ -31,9 +31,8 @@ include_directories(${tools_INCLUDE_DIRS})
 
 
 add_library(apt-core STATIC
-    "src/core/crossover.hpp"
-    "src/core/crossconfig.h"
-    "src/core/crossconfig.cpp"
+    "src/core/crossover.h"
+    "src/core/crossover.cpp"
     "src/core/phylogenictree.hpp"
     "src/core/ptreeconfig.h"
     "src/core/ptreeconfig.cpp"
