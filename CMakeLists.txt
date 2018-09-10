@@ -137,6 +137,8 @@ if (GENERATE_HELP)
 
     # Dot not look into the abyss
     set(DOXYGEN_EXCLUDE_SYMBOLS "_details::deepmagic::*"
+                                "_*_link_checker"
+                                "_*_metadata"
                                 "CFILE")
 
     # Qt help

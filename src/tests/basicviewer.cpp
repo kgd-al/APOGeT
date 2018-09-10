@@ -1,4 +1,4 @@
-#include "../core/crossover.hpp"
+#include "../core/crossover.h"
 #include "../visu/standaloneviewer.hpp"
 
 /*!
@@ -22,6 +22,8 @@ struct Genome {
 namespace config {
 /// Bare-bones configuration file. Placeholder for coreconfig
 struct CONFIG_FILE(Basic) {
+
+  /// Helper alias to the config file used by the bail-out crossover
   using BOCConfig = SAGConfigFile<genotype::BOCData>;
 
   /// Reference to the parameters for the crossover algorithms

@@ -11,7 +11,7 @@
 
 #include "kgd/external/json.hpp"
 #include "ptreeconfig.h"
-#include "crossover.hpp"
+#include "crossover.h"
 
 /*!
  * \file phylogenictree.hpp

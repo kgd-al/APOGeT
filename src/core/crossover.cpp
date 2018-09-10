@@ -1,26 +1,21 @@
 #include "crossover.h"
 
-namespace config {
+#define GENOME BOCData
 
-//#define CFILE Crossover
-//using B = CFILE::B;
-//using D = genotype::BOCData;
+DEFINE_GENOME_FIELD_WITH_BOUNDS(float, optimalDistance, 0.f, true, 4.f, 100.f)
+DEFINE_GENOME_FIELD_WITH_BOUNDS(float, inbreedTolerance, 0.f, 2.f, 2.f, 10.f)
+DEFINE_GENOME_FIELD_WITH_BOUNDS(float, outbreedTolerance, 0.f, 2.f, 2.f, 10.f)
 
-//DEFINE_PARAMETER(float, mutateChild, .5)
+DEFINE_GENOME_MUTATION_RATES({
+  MUTATION_RATE(optimalDistance, 1.f),
+  MUTATION_RATE(inbreedTolerance, 1.f),
+  MUTATION_RATE(outbreedTolerance, 1.f),
+})
 
-//DEFINE_PARAMETER(B, optimalDistance, &D::optimalDistance, 0.f, true, 4.f, 100.f)
-//DEFINE_PARAMETER(B, inbreedTolerance, &D::inbreedTolerance, 0.f, 2.f, 2.f, 10.f)
-//DEFINE_PARAMETER(B, outbreedTolerance, &D::outbreedTolerance, 0.f, 2.f, 2.f, 10.f)
+#undef GENOME
 
-//using CDM = CrossoverDataMutations;
-//using MutationRates = CFILE::MutationRates;
+#define CFILE config::SAGConfigFile<genotype::BOCData>
 
-//DEFINE_MAP_PARAMETER(MutationRates, cdMutations, {
-//  { CDM::DISTANCE, 1.f },
-//  {  CDM::INBREED, 1.f },
-//  { CDM::OUTBREED, 1.f },
-//})
-
-} // end of namespace config
+DEFINE_PARAMETER(float, mutateChild, .5)
 
 #undef CFILE

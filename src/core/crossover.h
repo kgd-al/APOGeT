@@ -10,7 +10,7 @@
 #include "kgd/genotype/selfawaregenome.hpp"
 
 /*!
- * \file crossover.hpp
+ * \file crossover.h
  *
  * Definition of structures and algorithms for implementing the Bail-Out Crossover
  */
@@ -35,6 +35,8 @@ class SELF_AWARE_GENOME(BOCData) {
 
   /// Standard deviation for distances above optimal
   DECLARE_GENOME_FIELD(float, outbreedTolerance)
+
+  friend config::SAGConfigFile<BOCData>;
 
 public:
   /// The possible sexs
@@ -140,8 +142,7 @@ public:
     return child;
   }
 
-  /// \return a randomly generated structure according to the bounds in
-  ///  #config::BOCData
+  /// \return a randomly generated structure according to the corresponding bounds
   static BOCData random (rng::AbstractDice &dice) {
     BOCData d = SelfAwareGenome<BOCData>::random(dice);
     d.sex = Sex(dice(.5));
@@ -215,6 +216,7 @@ namespace config {
 
 /// Config file for the crossover algorithms
 template <> struct SAG_CONFIG_FILE(BOCData) {
+  /// Helper alias to bounds object for floating point fields
   using Bf = Bounds<float>;
 
   /// Probability of mutating a child after crossover
@@ -222,18 +224,18 @@ template <> struct SAG_CONFIG_FILE(BOCData) {
 
   /// Mutation bounds for the optimal genetic distance
   /// \see genotype::BOCData::optimalDistance
-  DECLARE_PARAMETER(Bf, optimalDistance)
+  DECLARE_PARAMETER(Bf, optimalDistanceBounds)
 
   /// Mutation bounds for the inbreed tolerance
   /// \see genotye::BOCData::inbreedTolerance
-  DECLARE_PARAMETER(Bf, inbreedTolerance)
+  DECLARE_PARAMETER(Bf, inbreedToleranceBounds)
 
   /// Mutation bounds for the outbreed tolerance
   /// \see genotype::BOCData::outbreedTolerance
-  DECLARE_PARAMETER(Bf, outbreedTolerance)
+  DECLARE_PARAMETER(Bf, outbreedToleranceBounds)
 
   /// Mutation rates for the BOCData fields
-  DECLARE_PARAMETER(MutationRates, cdMutations)
+  DECLARE_PARAMETER(MutationRates, mutationRates)
 };
 
 } // end of namespace config
@@ -273,7 +275,7 @@ bool bailOutCrossver (const GENOME &mother, const GENOME &father,
   assert(0 <= compat && compat <= 1);
 
   if (dice(compat)) {
-    child = crossover(mother, father, dice, alg);
+    child = cross(mother, father, dice, alg);
     if (dice(config::SAGConfigFile<BOCData>::mutateChild())) child.mutate(dice);
     return true;
   }
