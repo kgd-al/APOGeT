@@ -93,13 +93,16 @@ public slots:
   /// Requests the scale of the view to be adapted to the size of the scene
   void makeFit (bool autofit);
 
-  /// Prints the current scene to an image file (with file selection dialog)
-  void print (void) {
-    printTo("");
+  /// Prints the current scene to the image file \p filename
+  void renderTo (QString filename = "");
+
+  /// Prints the current scene into a pixmap
+  QPixmap renderToPixmap (void) const {
+    return renderToPixmap(_items.scene->sceneRect().size().toSize());
   }
 
-  /// Prints the current scene to the image file \p filename
-  void printTo (QString filename);
+  /// Prints the current scene into a pixmap of size \p requestedSize
+  QPixmap renderToPixmap (const QSize &requestedSize) const;
 
 protected:
   /// The graphics config

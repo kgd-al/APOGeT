@@ -70,7 +70,7 @@ int run(int argc, char *argv[]) {
     return a.exec();
 
   } else {
-    pv.printTo(outfile);
+    pv.renderTo(outfile);
     return 0;
   }
 }

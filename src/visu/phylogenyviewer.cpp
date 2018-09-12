@@ -17,6 +17,7 @@
 #include <QDebug>
 
 #include "phylogenyviewer.h"
+#include "graphicutils.h"
 #include "graphicsviewzoom.h"
 
 /*!
@@ -118,7 +119,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   // Print action
   QAction *print = new QAction(style()->standardPixmap(QStyle::SP_DialogSaveButton), "Print", this);
   print->setShortcut(Qt::ControlModifier + Qt::Key_P);
-  connect(print, &QAction::triggered, this, &PhylogenyViewer_base::print);
+  connect(print, &QAction::triggered, this, &PhylogenyViewer_base::render);
 
   // Show names checkbox
   QCheckBox *showNames = new QCheckBox("Show names");
@@ -166,7 +167,7 @@ void PhylogenyViewer_base::render(uint step) {
   qss << "snapshots/ptree_step" << step << ".png";
   static int i=0;
   qDebug() << "[" << i++ << "] saved " << filename;
-  printTo(filename);
+  renderTo(filename);
 }
 
 void PhylogenyViewer_base::resizeEvent(QResizeEvent*) {
@@ -227,24 +228,29 @@ void PhylogenyViewer_base::genomeEntersEnveloppe (uint sid, uint) {
 void PhylogenyViewer_base::genomeLeavesEnveloppe (uint, uint) {}
 
 
-void PhylogenyViewer_base::printTo (QString filename) {
+void PhylogenyViewer_base::renderTo (QString filename) {
   if (filename.isEmpty())
     filename = QFileDialog::getSaveFileName(this, "Save to", ".", "Images (*.png)");
 
   if (filename.isEmpty()) return;
 
-  int Scale = 2;
+  QPixmap pixmap = renderToPixmap();
+  pixmap.save(filename);
+  std::cout << "Saved to " << filename.toStdString() << std::endl;
+}
 
-  QPixmap pixmap (Scale * _items.scene->sceneRect().size().toSize());
+QPixmap PhylogenyViewer_base::renderToPixmap (const QSize &requestedSize) const {
+  QPixmap pixmap (requestedSize);
   pixmap.fill(Qt::transparent);
+  QRectF bounds = gui::centeredInto(QRectF({0,0}, requestedSize),
+                                    _items.scene->sceneRect());
 
   QPainter painter(&pixmap);
   painter.setRenderHint(QPainter::Antialiasing);
-  _items.scene->render(&painter);
+  _items.scene->render(&painter, bounds.toRect());
   painter.end();
 
-  pixmap.save(filename);
-  std::cout << "Saved to " << filename.toStdString() << std::endl;
+  return pixmap;
 }
 
 }

@@ -9,7 +9,7 @@ DEFINE_GENOME_FIELD_WITH_BOUNDS(float, outbreedTolerance, "so", 0.f, 2.f, 2.f, 1
 using Sex = genotype::BOCData::Sex;
 DEFINE_GENOME_FIELD_WITH_BOUNDS(Sex, sex, "S", Sex::FEMALE, Sex::MALE)
 
-std::ostream& operator<< (std::ostream &os, Sex s) {
+std::ostream& genotype::operator<< (std::ostream &os, Sex s) {
   switch (s) {
   case Sex::FEMALE: return os << "F";
   case Sex::MALE: return os << "M";
@@ -18,7 +18,7 @@ std::ostream& operator<< (std::ostream &os, Sex s) {
   return os << "ERROR";
 }
 
-std::istream& operator>> (std::istream &is, Sex &s) {
+std::istream& genotype::operator>> (std::istream &is, Sex &s) {
   char c;
   is >> c;
   switch (c) {
@@ -33,7 +33,7 @@ DEFINE_GENOME_MUTATION_RATES({
   MUTATION_RATE(optimalDistance, 1.f),
   MUTATION_RATE(inbreedTolerance, 1.f),
   MUTATION_RATE(outbreedTolerance, 1.f),
-//  MUTATION_RATE(sex, 1.f),
+  MUTATION_RATE(sex, 1.f),
 })
 
 #undef GENOME

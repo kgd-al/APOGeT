@@ -36,14 +36,14 @@ class SELF_AWARE_GENOME(BOCData) {
   /// Standard deviation for distances above optimal
   DECLARE_GENOME_FIELD(float, outbreedTolerance)
 
-  /// Needs privileged access to the fields
-  friend config::SAGConfigFile<BOCData>;
+  /// Needs privileged access
+  friend struct config::SAGConfigFile<BOCData>;
 
 public:
   /// Helper alias to the source of randomness
   using Dice = SelfAwareGenome<BOCData>::Dice;
 
-  /// The possible sexs
+  /// The possible sexes
   enum Sex { FEMALE, MALE };
 
   /// Which sex the associated genome codes for
@@ -150,6 +150,7 @@ public:
   // ========================================================================
   // == Serialization
 
+  /// Overridden to include manual fields in the comparison
   void equalExtension (const BOCData &that, bool &eq) const override {
     eq &= id == that.id
        && parents[MOTHER] == that.parents[MOTHER]
@@ -157,7 +158,7 @@ public:
        && generation == that.generation;
   }
 
-  /// Converts a #genotype::BOCData structure into a field-named json
+  /// Overridden to include manual fields in the serialization
   void to_jsonExtension (nlohmann::json &j) const override {
     j["id"] = id;
     j["p0"] = parents[MOTHER];
@@ -165,7 +166,7 @@ public:
     j["G"] = generation;
   }
 
-  /// Reads a #genotype::BOCData structure from a field-named json
+  /// Overridden to include manual fields in the deserialization
   void from_jsonExtension (nlohmann::json &j) override {
     id = j["id"];               j.erase("id");
     parents[MOTHER] = j["p0"];  j.erase("p0");
@@ -174,7 +175,10 @@ public:
   }
 };
 
+/// Pretty prints a sex enumeration value
 std::ostream& operator<< (std::ostream &os, BOCData::Sex s);
+
+/// Converts a pretty printed sex enumeration value to its integer representation
 std::istream& operator>> (std::istream &is, BOCData::Sex &s);
 
 } // end of namespace genotype
@@ -213,23 +217,6 @@ template <> struct SAG_CONFIG_FILE(BOCData) {
 
 namespace genotype {
 
-namespace _details {
-
-struct EmptyAlignment {};
-
-template<class T, class = void>
-struct alignment_type{ using type = EmptyAlignment; };
-
-template<class T>
-struct alignment_type<T, typename std::void_t<typename T::Alignment>>{
-  using type = typename T::Alignment;
-};
-
-template <typename T>
-using alignment_type_t = typename alignment_type<T>::type;
-
-}
-
 /// Crossing of \p mother and \p father.
 /// The algorithm is:
 ///   - Compute the distance based on the genomes and alignment
@@ -247,7 +234,7 @@ using alignment_type_t = typename alignment_type<T>::type;
 /// Untouched otherwise
 /// \param dice Source of randomness.
 template <typename GENOME>
-std::enable_if_t<!std::is_same<std::void_t<typename GENOME::Alignment>, void>::value, bool>
+bool
 bailOutCrossver(const GENOME &mother, const GENOME &father,
                      GENOME &child, rng::AbstractDice &dice) {
 
