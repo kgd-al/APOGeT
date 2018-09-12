@@ -36,14 +36,18 @@ class SELF_AWARE_GENOME(BOCData) {
   /// Standard deviation for distances above optimal
   DECLARE_GENOME_FIELD(float, outbreedTolerance)
 
+  /// Needs privileged access to the fields
   friend config::SAGConfigFile<BOCData>;
 
 public:
+  /// Helper alias to the source of randomness
+  using Dice = SelfAwareGenome<BOCData>::Dice;
+
   /// The possible sexs
   enum Sex { FEMALE, MALE };
 
   /// Which sex the associated genome codes for
-  Sex sex;
+  DECLARE_GENOME_FIELD(Sex, sex)
 
   // ========================================================================
   // == Classification data
@@ -119,7 +123,7 @@ public:
   // == Specific genetic operators
 
   /// Updates internal data to reflect the clone status of the associated genome
-  void updateCloneLineage (GID parent, rng::AbstractDice &dice) {
+  void updateCloneLineage (GID parent, Dice &dice) {
     sex = dice.toss(Sex::FEMALE, Sex::MALE);
     id = nextID();
     parents[MOTHER] = parent;
@@ -127,88 +131,51 @@ public:
     generation++;
   }
 
-  /// Cross genetic material of both parent to create a new one
-  /// Also update internal data (id, parents, generation)
-  friend BOCData cross (const BOCData &lhs, const BOCData &rhs,
-                        rng::AbstractDice &dice) {
-    BOCData child = SelfAwareGenome<BOCData>::cross(lhs, rhs, dice);
-    dice.toss(lhs, rhs, child, &BOCData::sex);
-
-    child.id = nextID();
-    child.parents[MOTHER] = lhs.id;
-    child.parents[FATHER] = rhs.id;
-    child.generation = std::max(lhs.generation, rhs.generation) + 1;
-
-    return child;
+  /// Low-level crossing of manually managed fields (id, parents, generation)
+  void crossExtension(const BOCData &lhs, const BOCData &rhs, Dice&) override {
+    id = nextID();
+    parents[MOTHER] = lhs.id;
+    parents[FATHER] = rhs.id;
+    generation = std::max(lhs.generation, rhs.generation) + 1;
   }
 
-  /// \return a randomly generated structure according to the corresponding bounds
-  static BOCData random (rng::AbstractDice &dice) {
-    BOCData d = SelfAwareGenome<BOCData>::random(dice);
-    d.sex = Sex(dice(.5));
-
-    d.id = nextID();
-    d.parents[MOTHER] = -1;
-    d.parents[FATHER] = -1;
-    d.generation = 0;
-
-    return d;
+  /// Sets up manually managed field (id, parents, generation)
+  void randomExtension(Dice&) override {
+    id = nextID();
+    parents[MOTHER] = -1;
+    parents[FATHER] = -1;
+    generation = 0;
   }
 
   // ========================================================================
   // == Serialization
 
-  /// Equality comparator. Compares each field for equality.
-  friend bool operator== (const BOCData &lhs, const BOCData &rhs) {
-    return lhs.optimalDistance == rhs.optimalDistance
-        && lhs.inbreedTolerance == rhs.inbreedTolerance
-        && lhs.outbreedTolerance == rhs.outbreedTolerance
-        && lhs.sex == rhs.sex
-        && lhs.id == rhs.id
-        && lhs.parents[MOTHER] == rhs.parents[MOTHER]
-        && lhs.parents[FATHER] == rhs.parents[FATHER]
-        && lhs.generation == rhs.generation;
+  void equalExtension (const BOCData &that, bool &eq) const override {
+    eq &= id == that.id
+       && parents[MOTHER] == that.parents[MOTHER]
+       && parents[FATHER] == that.parents[FATHER]
+       && generation == that.generation;
   }
 
   /// Converts a #genotype::BOCData structure into a field-named json
-  friend void to_json (nlohmann::json &j, const BOCData &d) {
-    j["mu"] = d.optimalDistance;
-    j["si"] = d.inbreedTolerance;
-    j["so"] = d.outbreedTolerance;
-    j["S"] = d.sex;
-
-    j["id"] = d.id;
-    j["p0"] = d.parents[MOTHER];
-    j["p1"] = d.parents[FATHER];
-    j["G"] = d.generation;
+  void to_jsonExtension (nlohmann::json &j) const override {
+    j["id"] = id;
+    j["p0"] = parents[MOTHER];
+    j["p1"] = parents[FATHER];
+    j["G"] = generation;
   }
 
   /// Reads a #genotype::BOCData structure from a field-named json
-  friend void from_json (const nlohmann::json &j, BOCData &d) {
-    d.optimalDistance = j["mu"];
-    d.inbreedTolerance = j["si"];
-    d.outbreedTolerance = j["so"];
-    d.sex = j["S"];
-
-    d.id = j["id"];
-    d.parents[MOTHER] = j["p0"];
-    d.parents[FATHER] = j["p1"];
-    d.generation = j["G"];
-  }
-
-  // ========================================================================
-  // == Debugging
-
-  /// Stream operator. Mostly for debugging purposes
-  friend std::ostream& operator<< (std::ostream &os, const BOCData &d) {
-    return os << "("
-                << d.optimalDistance
-                << ", " << d.inbreedTolerance
-                << ", " << d.outbreedTolerance
-                << ", " << (d.sex == Sex::MALE ? "M" : "F")
-              << ")";
+  void from_jsonExtension (nlohmann::json &j) override {
+    id = j["id"];               j.erase("id");
+    parents[MOTHER] = j["p0"];  j.erase("p0");
+    parents[FATHER] = j["p1"];  j.erase("p1");
+    generation = j["G"];        j.erase("G");
   }
 };
+
+std::ostream& operator<< (std::ostream &os, BOCData::Sex s);
+std::istream& operator>> (std::istream &is, BOCData::Sex &s);
 
 } // end of namespace genotype
 
@@ -234,6 +201,10 @@ template <> struct SAG_CONFIG_FILE(BOCData) {
   /// \see genotype::BOCData::outbreedTolerance
   DECLARE_PARAMETER(Bf, outbreedToleranceBounds)
 
+  /// Mutation bounds for the sex
+  /// \see genotype::BOCData::sex
+  DECLARE_PARAMETER(Bounds<genotype::BOCData::Sex>, sexBounds)
+
   /// Mutation rates for the BOCData fields
   DECLARE_PARAMETER(MutationRates, mutationRates)
 };
@@ -241,6 +212,59 @@ template <> struct SAG_CONFIG_FILE(BOCData) {
 } // end of namespace config
 
 namespace genotype {
+
+namespace _details {
+
+struct EmptyAlignment {};
+
+template<class T, class = void>
+struct alignment_type{ using type = EmptyAlignment; };
+
+template<class T>
+struct alignment_type<T, typename std::void_t<typename T::Alignment>>{
+  using type = typename T::Alignment;
+};
+
+template <typename T>
+using alignment_type_t = typename alignment_type<T>::type;
+
+}
+
+/// Crossing of \p mother and \p father.
+/// The algorithm is:
+///   - Compute the distance based on the genomes and alignment
+///   - Request a compatiblity rating \p r from the mother based on this distance
+///   - Toss coin with success probability \p r
+///     - if unsuccessfull, bail-out
+///     - otherwise generate a child through the appropriate crossover algorithm
+/// and potentially mutate it a bit.
+///
+/// \tparam GENOME The genome structure to cross
+///
+/// \param mother Female genome, requested for compatibility data
+/// \param father Male genome
+/// \param child Container for child genome in case of successfull mating.
+/// Untouched otherwise
+/// \param dice Source of randomness.
+template <typename GENOME>
+std::enable_if_t<!std::is_same<std::void_t<typename GENOME::Alignment>, void>::value, bool>
+bailOutCrossver(const GENOME &mother, const GENOME &father,
+                     GENOME &child, rng::AbstractDice &dice) {
+
+  double dist = distance(mother, father);
+  assert(0 <= dist);
+
+  double compat = mother.compatibility(dist);
+  assert(0 <= compat && compat <= 1);
+
+  if (dice(compat)) {
+    child = cross(mother, father, dice);
+    if (dice(config::SAGConfigFile<BOCData>::mutateChild())) child.mutate(dice);
+    return true;
+  }
+
+  return false;
+}
 
 /// Crossing of \p mother and \p father.
 /// The algorithm is:
@@ -254,19 +278,18 @@ namespace genotype {
 /// and potentially mutate it a bit.
 ///
 /// \tparam GENOME The genome structure to cross
-/// \tparam Alignment Either the alignment structure provided by the genome or
-/// one specified at call location
 ///
 /// \param mother Female genome, requested for compatibility data
 /// \param father Male genome
 /// \param child Container for child genome in case of successfull mating.
 /// Untouched otherwise
 /// \param dice Source of randomness.
-template <typename GENOME, typename Alignment = typename GENOME::Alignment>
-bool bailOutCrossver (const GENOME &mother, const GENOME &father,
-                      GENOME &child, rng::AbstractDice &dice) {
+template <typename GENOME>
+std::enable_if_t<std::is_same<std::void_t<typename GENOME::Alignment>, void>::value, bool>
+bailOutCrossver(const GENOME &mother, const GENOME &father,
+                     GENOME &child, rng::AbstractDice &dice) {
 
-  Alignment alg = align(mother, father);
+  typename GENOME::Alignment alg = align(mother, father);
 
   double dist = distance(mother, father, alg);
   assert(0 <= dist);

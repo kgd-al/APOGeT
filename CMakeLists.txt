@@ -133,7 +133,8 @@ if (GENERATE_HELP)
     set(DOXYGEN_MACRO_EXPANSION YES)
 
     # Ignore generated moc files
-    set(DOXYGEN_EXCLUDE_PATTERNS "*moc_*")
+    set(DOXYGEN_EXCLUDE_PATTERNS "*moc_*"
+                                 "*.cpp")
 
     # Dot not look into the abyss
     set(DOXYGEN_EXCLUDE_SYMBOLS "_details::deepmagic::*"
