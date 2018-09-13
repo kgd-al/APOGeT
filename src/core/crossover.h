@@ -173,6 +173,14 @@ public:
     parents[FATHER] = j["p1"];  j.erase("p1");
     generation = j["G"];        j.erase("G");
   }
+
+  /// Overridden to include manual fields in the stream
+  void to_streamExtension (std::ostream &os) const override {
+    os << "id: " << id << "\n"
+       << "p0: " << parents[MOTHER] << "\n"
+       << "p1: " << parents[FATHER] << "\n"
+       << " G: " << generation << "\n";
+  }
 };
 
 /// Pretty prints a sex enumeration value
@@ -263,6 +271,9 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
 ///     - if unsuccessfull, bail-out
 ///     - otherwise generate a child through the appropriate crossover algorithm
 /// and potentially mutate it a bit.
+///
+/// \todo FIXME No longer able to use with alignment requiering types. Forwarding
+/// to auto-field managers is a pain...
 ///
 /// \tparam GENOME The genome structure to cross
 ///
