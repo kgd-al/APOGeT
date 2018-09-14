@@ -36,6 +36,11 @@ struct Callbacks_t {
   /// Alias to the collection of still-alive species id
   using LivingSet = typename PT::LivingSet;
 
+  /// \brief Called after determining the species for a genome
+  ///
+  /// Provides the identificators of the genome and its species
+  void onGenomeAffectedTo (SID sid, GID gid);
+
   /// \brief Called when the PTree has been stepped.
   ///
   /// Provides the current step and the set of still-alive species
@@ -188,42 +193,47 @@ public:
   /// Insert \p g into this PTree
   /// \return The species \p g was added to
   SID addGenome (const GENOME &g) {
+    SID sid = NoID;
+
     // Ensure that the root exists
     if (!_root) _root = makeNode(nullptr);
 
     // If genome is parent-less, assume that it comes from initialization data
     if (!g.hasParent(Parent::FATHER) || !g.hasParent(Parent::MOTHER))
-      return addGenome(g, _root);
+        sid = addGenome(g, _root);
 
-    // Retrieve parent's species
-    uint mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
-         pSID = _idToSpecies.parentSID(g, Parent::FATHER);
+    else {
+      // Retrieve parent's species
+      uint mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
+           pSID = _idToSpecies.parentSID(g, Parent::FATHER);
 
-    // Manage (poorly) hydrisation
-    assert(Config::ignoreHybrids() || mSID == pSID);
-    if (mSID != pSID) _hybrids++;
+      // Manage (poorly) hydrisation
+      assert(Config::ignoreHybrids() || mSID == pSID);
+      if (mSID != pSID) _hybrids++;
 
-    // All is well go ahead
-    if (mSID == pSID)
-      return addGenome(g, _nodes[mSID]);
+      // All is well go ahead
+      if (mSID == pSID)
+        sid = addGenome(g, _nodes[mSID]);
 
-    // Got a hybrid -> use mother species instead
-    else if (Config::ignoreHybrids()) {
-      if (Config::DEBUG() >= 0)
-        std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
+      // Got a hybrid -> use mother species instead
+      else if (Config::ignoreHybrids()) {
+        if (Config::DEBUG() >= 0)
+          std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
 
-      return addGenome(g, _nodes[mSID]);
+        sid = addGenome(g, _nodes[mSID]);
 
-    /// \todo Find a way to deal with this
-    } else {
-      assert(false);
-      if (Config::DEBUG())
-        std::cerr << "Managing hybrid genome " << g.id() << std::endl;
+      /// \todo Find a way to deal with this
+      /// \todo Got an idea!
+      } else {
+        assert(false);
+        if (Config::DEBUG())
+          std::cerr << "Managing hybrid genome " << g.id() << std::endl;
+      }
     }
 
-    // Should never reach this point
-    assert(false);
-    return NoID;
+    assert(sid != NoID);
+    if (_callbacks) _callbacks->onGenomeAffectedTo(sid, g.id());
+    return sid;
   }
 
   /// Remove \p g from this PTree (and update relevant internal data)

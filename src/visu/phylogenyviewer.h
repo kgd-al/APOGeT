@@ -45,6 +45,10 @@ public:
   }
 
 signals:
+  /// \brief Emitted when a genome is affected to a species
+  /// \copydetails phylogeny::Callbacks_t::onGenomeAffectedTo
+  void onGenomeAffectedTo (uint sid, uint gid);
+
   /// \brief Emitted when the tree is stepped
   /// \copydetails phylogeny::Callbacks_t::onStepped
   void onTreeStepped (uint step, const std::set<uint> &living);
@@ -242,6 +246,14 @@ struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
 
   /// Creates a callback object associated with a specific viewer
   Callbacks_t (PV *v) : viewer(v) {}
+
+  /// Notify the outside world that the associated tree has
+  /// decided upon affecting genome \p gid to species \p sid
+  ///
+  /// \copydetails phylogeny::Callbacks_t::onGenomeAffectedTo
+  void onGenomeAffectedTo (SID sid, GID gid) {
+    emit viewer->onGenomeAffectedTo(sid, gid);
+  }
 
   /// Notify both the viewer and the outside world that the associated tree has
   /// been stepped
