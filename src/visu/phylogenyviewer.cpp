@@ -210,7 +210,7 @@ void PhylogenyViewer_base::makeFit(bool autofit) {
 // ============================================================================
 // == Phylogeny update
 // ============================================================================
-void PhylogenyViewer_base::treeStepped (uint step, const std::set<uint> &living) {
+void PhylogenyViewer_base::treeStepped (uint step, const LivingSet &living) {
   for (Node *n: _items.nodes)
     n->updateNode(living.find(n->id) != living.end());
   _items.border->setHeight(step);
@@ -218,14 +218,14 @@ void PhylogenyViewer_base::treeStepped (uint step, const std::set<uint> &living)
   makeFit(_config.autofit);
 }
 
-void PhylogenyViewer_base::genomeEntersEnveloppe (uint sid, uint) {
+void PhylogenyViewer_base::genomeEntersEnveloppe (SID sid, GID) {
   const uint K = config::PTree::enveloppeSize();
   Node *n = _items.nodes.value(sid);
   n->enveloppe = std::min(n->enveloppe + 1, K);
   n->autoscale();
 }
 
-void PhylogenyViewer_base::genomeLeavesEnveloppe (uint, uint) {}
+void PhylogenyViewer_base::genomeLeavesEnveloppe (SID, GID) {}
 
 
 void PhylogenyViewer_base::renderTo (QString filename) {

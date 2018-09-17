@@ -121,7 +121,7 @@ void Node::invalidate(const QPointF &newPos) {
 void Node::updateTooltip (void) {
   QString tooltip;
   QTextStream qss (&tooltip);
-  qss << "Node " << id << "\n"
+  qss << "Node " << std::underlying_type<SID>::type(id) << "\n"
       << "Enveloppe: " << 100 * fullness() << "%\n"
       << "Appeared at " << data.firstAppearance << "\n"
       << "Disappeared at " << data.lastAppearance << "\n"
@@ -181,7 +181,7 @@ void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) 
     painter->setPen(_onSurvivorPath ? Qt::red : Qt::black);
     painter->drawEllipse(boundingRect().center(), NODE_RADIUS, NODE_RADIUS);
     painter->setPen(Qt::black);
-    painter->drawText(r, Qt::AlignCenter, QString::number(id));
+    painter->drawText(r, Qt::AlignCenter, sid);
   }
 }
 

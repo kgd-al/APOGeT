@@ -26,6 +26,12 @@ struct PTreeBuildingCache {
   const uint time;  ///< The current timestamp
 
   GUIItems &items;  ///< The graphics items cache data
+
+  /// Callback type for managing node hovering events
+  using HoverCallback = std::function<void(phylogeny::TreeTypes::SID, bool)>;
+
+  /// Callback for managing node hovering events
+  HoverCallback hoverCallback;
 };
 
 struct PolarCoordinates;
@@ -54,7 +60,10 @@ public:
 
   Visibilities visibilities;  ///< This node's current visibility values
 
-  const uint id;  ///< The identificator of the associated species node
+  /// Helper alias to the species identificator
+  using SID = phylogeny::TreeTypes::SID;
+
+  const SID id;  ///< The identificator of the associated species node
   Node *parent;   ///< The parent node (if any)
 
   /// Helper alias for the ptree's species data
@@ -64,16 +73,22 @@ public:
   uint enveloppe; ///< Size of the associated species' enveloppe
   uint children;  ///< Number of subspecies
 
+  const QString sid; ///< String representation of the node's identificator
   Path *path; ///< The graphic item connecting this node to its parent (if any)
   Timeline *timeline; ///< The graphic item depicting this node's lifetime
 
   /// The graphic items corresponding to the associated species 'children'
   QVector<Node*> subnodes;
 
+  /// The callback function managing the callback events
+  const PTreeBuildingCache::HoverCallback hoverCallback;
+
   /// Build a graphic node out of a potential parent and PTree data
-  template <typename PN>
-  Node (Node *parent, const PN &n)
-    : id(n.id), parent(parent), data(n.data), path(nullptr), timeline(nullptr) {
+  template <typename PN, typename HC>
+  Node (Node *parent, const PN &n, HC hoverCallback)
+    : id(n.id), parent(parent), data(n.data),
+      sid(QString::number(std::underlying_type<SID>::type(id))),
+      path(nullptr), timeline(nullptr), hoverCallback(hoverCallback) {
 
     enveloppe = n.enveloppe.size();
     children = n.children.size();
@@ -82,6 +97,7 @@ public:
     setOnSurvivorPath(false);
 
     autoscale();
+    setAcceptHoverEvents(true);
   }
 
   /// Recompute all cached data
@@ -140,6 +156,16 @@ public:
   /// respect to the target amount defined in config::PTree::enveloppeSize
   float fullness (void) const {
     return float(enveloppe) / config::PTree::enveloppeSize();
+  }
+
+  /// Triggers a callback when this species node is hovered
+  void hoverEnterEvent(QGraphicsSceneHoverEvent*) override {
+    hoverCallback(id, true);
+  }
+
+  /// Triggers a callback when this species node is no longer hovered
+  void hoverLeaveEvent(QGraphicsSceneHoverEvent*) override {
+    hoverCallback(id, false);
   }
 
   /// \returns this graphics item bounding box
@@ -253,7 +279,7 @@ struct GUIItems {
   Border *border; ///< Border & legend manager
   Node *root; ///< Root of the graph's tree
 
-  QMap<uint, Node*> nodes;  ///< Lookup table for the graphics nodes
+  QMap<Node::SID, Node*> nodes;  ///< Lookup table for the graphics nodes
 };
 
 /// Helper structure managing the construction of a PTree's associated graph
@@ -286,7 +312,7 @@ struct PTGraphBuilder {
   template <typename PN>
   static void addSpecies(Node *parent, const PN &n, Cache &cache) {
     // Create node
-    Node *gn = new Node (parent, n);
+    Node *gn = new Node (parent, n, cache.hoverCallback);
 
     // Update related cache values
     if (parent)

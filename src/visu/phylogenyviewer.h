@@ -21,6 +21,15 @@ class PhylogenyViewer_base : public QDialog {
   Q_OBJECT
 protected:
 
+  /// \copydoc genotype::BOCData::GID
+  using GID = genotype::BOCData::GID;
+
+  /// \copydoc phylogeny::TreeTypes::SID
+  using SID = phylogeny::TreeTypes::SID;
+
+  /// \copydoc phylogeny::TreeTypes::LivingSet
+  using LivingSet = phylogeny::TreeTypes::LivingSet;
+
   /// Configuration data controlling what to draw and how
   using Config = gui::ViewerConfig;
 
@@ -45,41 +54,40 @@ public:
   }
 
 signals:
-  /// \brief Emitted when a genome is affected to a species
-  /// \copydetails phylogeny::Callbacks_t::onGenomeAffectedTo
-  void onGenomeAffectedTo (uint sid, uint gid);
-
   /// \brief Emitted when the tree is stepped
   /// \copydetails phylogeny::Callbacks_t::onStepped
-  void onTreeStepped (uint step, const std::set<uint> &living);
+  void onTreeStepped (uint step, const LivingSet &living);
 
   /// Emitted when a species has been added to the tree
   /// \copydetails phylogeny::Callbacks_t::onNewSpecies
-  void onNewSpecies (uint pid, uint sid);
+  void onNewSpecies (SID pid, SID sid);
 
   /// Emitted when a species' enveloppe has changed
   /// \copydetails phylogeny::Callbacks_t::onGenomeEntersEnveloppe
-  void onGenomeEntersEnveloppe (uint sid, uint gid);
+  void onGenomeEntersEnveloppe (SID sid, GID gid);
 
   /// Emitted when a species has been added to the tree
   /// \copydetails phylogeny::Callbacks_t::onGenomeLeavesEnveloppe
-  void onGenomeLeavesEnveloppe (uint sid, uint gid);
+  void onGenomeLeavesEnveloppe (SID sid, GID gid);
+
+  /// Emitted when a species starts/stops being hovered
+  void onSpeciesHoverEvent (SID sid, bool entered);
 
 protected slots:
   // ===========================================================================
   // Callbacks from PTree
 
   /// Process a step event (new timestamp/living species)
-  void treeStepped (uint step, const std::set<uint> &living);
+  void treeStepped (uint step, const LivingSet &living);
 
   /// Move to template version (need to provide the node)
 //  void newSpecies (uint pid, uint sid);
 
   /// Process a enveloppe change event
-  void genomeEntersEnveloppe (uint sid, uint gid);
+  void genomeEntersEnveloppe (SID sid, GID gid);
 
   /// \copydoc genomeEntersEnveloppe
-  void genomeLeavesEnveloppe (uint sid, uint gid);
+  void genomeLeavesEnveloppe (SID sid, GID gid);
 
   // ===========================================================================
   // Config update
@@ -182,7 +190,12 @@ public:
 
   /// Helper function for getting a tree building cache
   auto cache (void) {
-    return PTreeBuildingCache { _config, _ptree.step(), _items };
+    return PTreeBuildingCache {
+      _config, _ptree.step(), _items,
+      [this] (auto sid, auto entered) {
+        emit onSpeciesHoverEvent(sid, entered);
+      }
+    };
   }
 
   /// Request full parsing of the associated PTree for a complete graph generation
@@ -200,9 +213,9 @@ public:
 
 public:
   /// Process a new species event (add a new node to the graph)
-  void newSpecies (uint pid, uint sid) {
+  void newSpecies (SID pid, SID sid) {
     auto c = cache();
-    Node *parent = (pid != PTree::NoID) ? _items.nodes[pid] : nullptr;
+    Node *parent = (pid != SID::INVALID) ? _items.nodes[pid] : nullptr;
     const auto &pn = *_ptree.nodeAt(sid);
     Builder::addSpecies(parent, pn, c);
     Builder::updateLayout(_items);
@@ -242,18 +255,10 @@ struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
   using SID = typename PT::SID;
 
   /// Helper alias to a collection of still-alive species
-  using LivingSet = typename PT::LivingSet;
+  using LivingSet = phylogeny::TreeTypes::LivingSet;
 
   /// Creates a callback object associated with a specific viewer
   Callbacks_t (PV *v) : viewer(v) {}
-
-  /// Notify the outside world that the associated tree has
-  /// decided upon affecting genome \p gid to species \p sid
-  ///
-  /// \copydetails phylogeny::Callbacks_t::onGenomeAffectedTo
-  void onGenomeAffectedTo (SID sid, GID gid) {
-    emit viewer->onGenomeAffectedTo(sid, gid);
-  }
 
   /// Notify both the viewer and the outside world that the associated tree has
   /// been stepped

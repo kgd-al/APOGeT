@@ -53,18 +53,23 @@ public:
   // == Classification data
 
   /// Defined type for GenomeID
-  using GID = uint;
+  enum class GID : uint {};
+
+  /// Auto-convert outstream operator
+  friend std::ostream& operator<< (std::ostream &os, GID gid) {
+    return os << std::underlying_type<GID>::type(gid);
+  }
 
   /// Definition of invalid ID
-  static constexpr GID NO_ID = GID(-1);
+  static constexpr GID INVALID_GID = GID(-1);
 
   /// The id of the associated genome
   GID id;
 
   /// Generate next id value (thread-safe)
   static GID nextID (void) {
-    static std::atomic<GID> NEXT_ID (0);
-    return NEXT_ID++;
+    static std::atomic<uint> NEXT_ID (0);
+    return GID(NEXT_ID++);
   }
 
   /// The set of parents
@@ -81,7 +86,7 @@ public:
 
   /// \return Whether or not the genome has registered a parent \p p
   bool hasParent (Parent p) const {
-    return parents[p] != NO_ID;
+    return parents[p] != INVALID_GID;
   }
 
   /// \return The id of parent \p p
@@ -127,7 +132,7 @@ public:
     sex = dice.toss(Sex::FEMALE, Sex::MALE);
     id = nextID();
     parents[MOTHER] = parent;
-    parents[FATHER] = -1;
+    parents[FATHER] = INVALID_GID;
     generation++;
   }
 
@@ -142,8 +147,8 @@ public:
   /// Sets up manually managed field (id, parents, generation)
   void randomExtension(Dice&) override {
     id = nextID();
-    parents[MOTHER] = -1;
-    parents[FATHER] = -1;
+    parents[MOTHER] = INVALID_GID;
+    parents[FATHER] = INVALID_GID;
     generation = 0;
   }
 

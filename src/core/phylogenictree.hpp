@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "kgd/external/json.hpp"
+#include "treetypes.hpp"
 #include "ptreeconfig.h"
 #include "crossover.h"
 
@@ -35,11 +36,6 @@ struct Callbacks_t {
 
   /// Alias to the collection of still-alive species id
   using LivingSet = typename PT::LivingSet;
-
-  /// \brief Called after determining the species for a genome
-  ///
-  /// Provides the identificators of the genome and its species
-  void onGenomeAffectedTo (SID sid, GID gid);
 
   /// \brief Called when the PTree has been stepped.
   ///
@@ -104,17 +100,11 @@ public:
   /// Helper alias for the genome identificator
   using GID = genotype::BOCData::GID;
 
-  /// Alias for the species identificator
-  using SID = uint;
-
-  /// Value indicating an unspecified species
-  static constexpr SID NoID = SID(-1);
+  /// \copydoc TreeTypes::SID
+  using SID = TreeTypes::SID;
 
   /// Helper alias for the Parent enumeration
   using Parent = genotype::BOCData::Parent;
-
-  /// Collections of still-alive species identificators
-  using LivingSet = std::set<SID>;
 
   /// Specialization used by this tree. Uses CRTP
   using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
@@ -124,7 +114,7 @@ public:
 
   /// Create an empty PTree
   PhylogenicTree(void) {
-    _nextNodeID = 0;
+    _nextNodeID = SID(0);
     _step = 0;
     _hybrids = 0;
     _root = nullptr;
@@ -148,8 +138,8 @@ public:
   }
 
   /// \return the node with id/index i
-  const auto& nodeAt (uint i) const {
-    return _nodes.at(i);
+  const auto& nodeAt (SID i) const {
+    return _nodes.at(std::underlying_type<SID>::type(i));
   }
 
   /// \return the current timestep for this PTree
@@ -174,13 +164,13 @@ public:
   void step (uint step, IT begin, IT end, F geneticID) {
 
     // Determine which species are still alive
-    LivingSet aliveSpecies;
+    TreeTypes::LivingSet aliveSpecies;
     for (IT it = begin; it != end; ++it)
       aliveSpecies.insert(_idToSpecies.at(geneticID(*it)));
 
     // Update internal data
     for (SID sid: aliveSpecies)
-      _nodes.at(sid)->data.lastAppearance = step;
+      nodeAt(sid)->data.lastAppearance = step;
     _step = step;
 
     // Potentially notify outside world
@@ -193,56 +183,56 @@ public:
   /// Insert \p g into this PTree
   /// \return The species \p g was added to
   SID addGenome (const GENOME &g) {
-    SID sid = NoID;
-
     // Ensure that the root exists
     if (!_root) _root = makeNode(nullptr);
 
     // If genome is parent-less, assume that it comes from initialization data
     if (!g.hasParent(Parent::FATHER) || !g.hasParent(Parent::MOTHER))
-        sid = addGenome(g, _root);
+        return addGenome(g, _root);
 
-    else {
-      // Retrieve parent's species
-      uint mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
-           pSID = _idToSpecies.parentSID(g, Parent::FATHER);
+    // Retrieve parent's species
+    SID mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
+        pSID = _idToSpecies.parentSID(g, Parent::FATHER);
 
-      // Manage (poorly) hydrisation
-      assert(Config::ignoreHybrids() || mSID == pSID);
-      if (mSID != pSID) _hybrids++;
+    using SID_t = std::underlying_type<SID>::type;
+    SID_t i_id = SID_t(mSID);
 
-      // All is well go ahead
-      if (mSID == pSID)
-        sid = addGenome(g, _nodes[mSID]);
+    // Manage (poorly) hydrisation
+    assert(Config::ignoreHybrids() || mSID == pSID);
+    if (mSID != pSID) _hybrids++;
 
-      // Got a hybrid -> use mother species instead
-      else if (Config::ignoreHybrids()) {
-        if (Config::DEBUG() >= 0)
-          std::cerr << "Linking hybrid genome " << g.id() << " to mother species" << std::endl;
+    // All is well go ahead
+    if (mSID == pSID)
+      return addGenome(g, _nodes[i_id]);
 
-        sid = addGenome(g, _nodes[mSID]);
+    // Got a hybrid -> use mother species instead
+    else if (Config::ignoreHybrids()) {
+      if (Config::DEBUG() >= 0)
+        std::cerr << "Linking hybrid genome "
+                  << g.id() << " to mother species" << std::endl;
 
-      /// \todo Find a way to deal with this
-      /// \todo Got an idea!
-      } else {
-        assert(false);
-        if (Config::DEBUG())
-          std::cerr << "Managing hybrid genome " << g.id() << std::endl;
-      }
+      return addGenome(g, _nodes[i_id]);
+
+    /// \todo Find a way to deal with this
+    /// \todo Got an idea!
+    } else {
+      assert(false);
+      if (Config::DEBUG())
+        std::cerr << "Managing hybrid genome " << g.id() << std::endl;
     }
 
-    assert(sid != NoID);
-    if (_callbacks) _callbacks->onGenomeAffectedTo(sid, g.id());
-    return sid;
+    assert(false);
+    return SID::INVALID;
   }
 
   /// Remove \p g from this PTree (and update relevant internal data)
-  void delGenome (const GENOME &g) {
+  SID delGenome (const GENOME &g) {
     auto sid = _idToSpecies.remove(g);
     if (Config::DEBUG())
       std::cerr << "New last appearance of species " << sid << " is " << _step << std::endl;
 
-    _nodes[sid]->data.lastAppearance = _step;
+    nodeAt(sid)->data.lastAppearance = _step;
+    return sid;
   }
 
   /// Stream \p pt to \p os. Mostly for debugging purpose: output is quickly
@@ -260,9 +250,18 @@ public:
     ofs << "}\n";
   }
 
-protected:
+private:
   /// Identificator for the next species
   SID _nextNodeID;
+
+protected:
+  /// Wraps incrementation of the species identificator counter
+  SID nextNodeID (void) {
+    using SID_t = std::underlying_type<SID>::type;
+    SID curr = _nextNodeID;
+    _nextNodeID = SID(SID_t(_nextNodeID)+1);
+    return curr;
+  }
 
   /// Helper structure for ensuring that the pair values are ordered
   ///
@@ -437,7 +436,7 @@ protected:
   ///   - Callbacks_t::onNewSpecies
 
   Node_ptr makeNode (Node_ptr parent) {
-    Node_ptr p = std::make_shared<Node>(_nextNodeID++, parent);
+    Node_ptr p = std::make_shared<Node>(nextNodeID(), parent);
     p->data.firstAppearance = _step;
     p->data.lastAppearance = _step;
     p->data.count = 1;
@@ -445,9 +444,14 @@ protected:
     _nodes.push_back(p);
 
     if (parent) parent->children.push_back(p);
-    if (_callbacks)  _callbacks->onNewSpecies(parent ? parent->id : NoID, p->id);
+    if (_callbacks)  _callbacks->onNewSpecies(parent ? parent->id : SID::INVALID, p->id);
 
     return p;
+  }
+
+  /// \copydoc nodeAt
+  auto& nodeAt (SID i) {
+    return const_cast<Node_ptr&>(std::as_const(*this).nodeAt(i));
   }
 
   /// Find the appropriate place for \p g in the subtree rooted at \p species
@@ -488,7 +492,7 @@ protected:
     }
 
     assert(false);
-    return NoID;
+    return SID::INVALID;
   }
 
   /// \return Whether \p g is similar enough to \p species
