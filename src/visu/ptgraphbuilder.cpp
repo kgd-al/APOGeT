@@ -124,7 +124,9 @@ void Node::updateTooltip (void) {
   qss << "Node " << std::underlying_type<SID>::type(id) << "\n"
       << "Enveloppe: " << 100 * fullness() << "%\n"
       << "Appeared at " << data.firstAppearance << "\n"
-      << "Disappeared at " << data.lastAppearance << "\n"
+      << "Disappeared at "
+        << (_alive ? "-" : QString::number(data.lastAppearance))
+        << "\n"
       << data.count << " individuals\n"
       << children << " subspecies";
   setToolTip(tooltip);
@@ -165,6 +167,7 @@ void Node::updateNode (bool alive) {
   }
 
   timeline->invalidatePath();
+  updateTooltip();
 }
 
 void Node::setOnSurvivorPath (bool osp) {

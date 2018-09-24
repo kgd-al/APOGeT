@@ -19,13 +19,19 @@ namespace genotype {
 
 /// Common crossover control data
 class SELF_AWARE_GENOME(BOCData) {
-  /// The compatibility function. Half of an unnormalized gaussian.
-  double gaussoid (double x, double mu, double sigma) const {
-    return exp(-((x-mu)*(x-mu)/(2.*sigma*sigma)));
-  }
-
   // ========================================================================
   // == Compatibility function
+
+  /// The compatibility function. Two halves of an unnormalized gaussian.
+  static double gaussoid (double d, double mu, double sigma) {
+    return exp(-((d-mu)*(d-mu)/(2.*sigma*sigma)));
+  }
+
+  /// The inverse compatibility function. Returns the distances for this
+  ///  compatibility value
+  static double gaussoid_inverse (double c, double mu, double sigma, int sign) {
+    return std::max(0., mu + sign * sqrt(-2 * sigma * sigma * log(c)));
+  }
 
   /// Genetic distance that maximises reproduction compatibility
   DECLARE_GENOME_FIELD(float, optimalDistance)
@@ -123,6 +129,21 @@ public:
     return gaussoid(distance, optimalDistance,
                     distance < optimalDistance ? inbreedTolerance : outbreedTolerance);
   }
+
+  /// Evalutes the distance between this genome and another that produced the
+  /// compatibility value \p compat
+  ///
+  /// This is the inverse operation of operator()(double)
+  ///
+  /// \param compat the compatibility
+  /// \param d_inbreed the distance for inbreeding
+  /// \param d_outbreed the distance for outbreeding
+  void operator() (double compat, double &d_inbreed, double &d_outbreed) const {
+    assert(0 <= compat && compat <= 1);
+    d_inbreed = gaussoid_inverse(compat, optimalDistance, inbreedTolerance, -1);
+    d_outbreed = gaussoid_inverse(compat, optimalDistance, outbreedTolerance, 1);
+  }
+
 
   // ========================================================================
   // == Specific genetic operators
