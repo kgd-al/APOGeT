@@ -6,7 +6,6 @@ namespace config {
 
 DEFINE_PARAMETER(double, compatibilityThreshold, .1)
 DEFINE_PARAMETER(double, similarityThreshold, .5)
-DEFINE_PARAMETER(double, outperformanceThreshold, .75)
 DEFINE_PARAMETER(uint, enveloppeSize, 5)
 DEFINE_PARAMETER(bool, simpleNewSpecies, true)
 DEFINE_PARAMETER(bool, ignoreHybrids, true)

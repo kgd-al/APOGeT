@@ -22,9 +22,6 @@ struct CFILE : public ConfigFile<CFILE> {
   /// Number of votes required to being considered as belonging
   DECLARE_PARAMETER(double, similarityThreshold)
 
-  /// Number of enveloppe points to out-perform to be considered better
-  DECLARE_PARAMETER(double, outperformanceThreshold)
-
   /// Number of genome stored as enveloppe points
   DECLARE_PARAMETER(uint, enveloppeSize)
 

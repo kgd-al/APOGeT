@@ -512,6 +512,18 @@ protected:
     return matable >= Config::similarityThreshold() * k;
   }
 
+  template <typename T>
+  static std::vector<size_t> ordered(std::vector<T> const& values) {
+    std::vector<size_t> indices(values.size());
+    std::iota(begin(indices), end(indices), static_cast<size_t>(0));
+
+    std::sort(
+      begin(indices), end(indices),
+      [&values](size_t a, size_t b) { return values[a] > values[b]; }
+    );
+    return indices;
+  }
+
   /// Insert \p g into node \p species, possibly changing the enveloppe.
   ///
   /// Callbacks:
@@ -528,7 +540,7 @@ protected:
     auto &dist = species->distances;
 
     // Populate the enveloppe
-    if (species->enveloppe.size() < Config::enveloppeSize()) {
+    if (k < Config::enveloppeSize()) {
       if (Config::DEBUG())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(g);
@@ -538,58 +550,83 @@ protected:
 
     // Better enveloppe point ?
     } else {
+      /// \todo cache these computations (variances, least contributing)
       assert(k == Config::enveloppeSize());
 
-      // Find most similar current enveloppe point
-      double minDistance = dccache.distances[0];
-      uint closest = 0;
-      for (uint i=1; i<k; i++) {
-        double d = dccache.distances[i];
-        if (d < minDistance) {
-          minDistance = d;
-          closest = i;
-        }
-      }
-      if (Config::DEBUG() >= 2)
-        std::cerr << "\t\tClosest to "
-                  << closest
-                  << " (id: " << species->enveloppe[closest].id()
-                  << ", d = " << minDistance << ")" << std::endl;
+      double maxContribution = -std::numeric_limits<double>::max();
+      uint leastContributor = -1;
 
-      // Compute number of times 'g' is better (i.e. more distinct) than the one on the ejectable seat
-      uint newIsBest = 0;
+      const auto pad = [&g] {
+        return std::setw(ceil(log10(std::underlying_type<GID>::type(g.id()))));
+      };
+
+      // Compute variance contributions and least contributor
       for (uint i=0; i<k; i++) {
-        if (i != closest) {
-          if (Config::DEBUG() >= 2)
-            std::cerr << "\t\t" << i << "(" << species->enveloppe[i].id()
-                      << "): " << dccache.distances[i] << " >? "
-                      << dist[{i,closest}] << std::endl;
+        std::vector<double> d_i (k), d_g(k);
+        if (Config::DEBUG() >= 2)
+          std::cerr << "\n\t\tc(" << pad() << species->enveloppe[i].id()
+                    << "/" << pad() << g.id() << ") =";
 
-          newIsBest += (dccache.distances[i] > dist[{i,closest}]);
+        for (uint j=0; j<k; j++) {
+          if (i == j) continue;
+          d_i.push_back(dist.at({i,j}));
+          d_g.push_back(dccache.distances[j]);
+
+          double d_ij = distance(species->enveloppe[i], species->enveloppe[j]);
+          assert(dist.at({i,j}) == d_ij);
+
+          double d_gj = distance(g, species->enveloppe[j]);
+          assert(dccache.distances[j] == d_gj);
+        }
+
+        double c = 0;
+        const double N = k*(k-1)/2;
+        const auto i_i = ordered(d_i), i_g = ordered(d_g);
+        for (uint j=0; j<k-1; j++) {
+          c += (j+1) * (
+            - d_i[i_i[j]] + d_g[i_g[j]]
+          )/ N;
+
+          if (Config::DEBUG() >= 2) {
+            std::cerr << std::left;
+            if (j>0)  std::cerr << "\t\t  " << pad() << " "
+                                << " " << pad() << " " << "   ";
+            std::cerr << "\t(" << j+1 << "/" << N << ") * (- "
+                      << std::setw(8) << d_i[i_i[j]]
+                      << " + " << std::setw(8) << d_g[i_g[j]] << ")";
+            if (j<k-2)  std::cerr << "\n";
+          }
+        }
+
+        if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
+        if (maxContribution < c) {
+          maxContribution = c;
+          leastContributor = i;
         }
       }
 
       // Genome inside the enveloppe. Nothing to do
-      if (newIsBest < Config::outperformanceThreshold() * (k-1)) {
+      if (maxContribution <= 0) {
         if (Config::DEBUG())
-          std::cerr << "\tGenome deemed unremarkable with "
-                    << k - 1 - newIsBest << " to " << newIsBest << std::endl;
+          std::cerr << "\t" << g.id() << "'s variance contribution is too low ("
+                    << maxContribution << ")" << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
         if (Config::DEBUG())
-          std::cerr << "\tReplaced enveloppe point " << closest
-                    << " with a vote of " << newIsBest << " to " << k - 1 - newIsBest
-                    << std::endl;
+          std::cerr << "\t" << g.id() << "'s variance contribution is better "
+                    << "than enveloppe point " << leastContributor << " (id: "
+                    << species->enveloppe[leastContributor].id()
+                    << ", c = " << maxContribution << ")" << std::endl;
 
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[closest].id());
+          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[leastContributor].id());
           callbacks->onGenomeEntersEnveloppe(species->id, g.id());
         }
-        species->enveloppe[closest] = g;
+        species->enveloppe[leastContributor] = g;
         for (uint i=0; i<k; i++)
-          if (i != closest)
-            dist[{i,closest}] = dccache.distances[i];
+          if (i != leastContributor)
+            dist[{i,leastContributor}] = dccache.distances[i];
       }
     }
 
