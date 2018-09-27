@@ -526,6 +526,7 @@ protected:
     return matable >= Config::similarityThreshold() * k;
   }
 
+  /// \returns a vector of indices into \p values allowing sorted access
   template <typename T>
   static std::vector<size_t> ordered(std::vector<T> const& values) {
     std::vector<size_t> indices(values.size());
