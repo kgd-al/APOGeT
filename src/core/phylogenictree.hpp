@@ -339,6 +339,11 @@ protected:
     /// Cache collection of compatibilities
     std::vector<float> compatibilities;
 
+    /// Remove all contents
+    void clear (void) {
+      distances.clear(),  compatibilities.clear();
+    }
+
     /// Prepare exactly \p n units of storage space
     void reserve (uint n) {
       distances.reserve(n), compatibilities.reserve(n);
@@ -347,6 +352,12 @@ protected:
     /// Append values
     void push_back (float d, float c) {
       distances.push_back(d), compatibilities.push_back(c);
+    }
+
+    /// \returns the size of the cache
+    size_t size (void) const {
+      assert(distances.size() == compatibilities.size());
+      return distances.size();
     }
   };
 
@@ -498,6 +509,8 @@ protected:
   /// \return Whether \p g is similar enough to \p species
   friend bool matchesSpecies (const GENOME &g, Node_ptr species, DCCache &dccache) {
     uint k = species->enveloppe.size();
+
+    dccache.clear();
     dccache.reserve(k);
 
     uint matable = 0;
@@ -509,6 +522,7 @@ protected:
       dccache.push_back(d, c);
     }
 
+    assert(dccache.size() == k);
     return matable >= Config::similarityThreshold() * k;
   }
 
@@ -573,10 +587,10 @@ protected:
           d_g.push_back(dccache.distances[j]);
 
           double d_ij = distance(species->enveloppe[i], species->enveloppe[j]);
-          assert(dist.at({i,j}) == d_ij);
+          assert(fabs(dist.at({i,j}) - d_ij) < 1e-3);
 
           double d_gj = distance(g, species->enveloppe[j]);
-          assert(dccache.distances[j] == d_gj);
+          assert(fabs(dccache.distances[j] - d_gj) < 1e-3);
         }
 
         double c = 0;
