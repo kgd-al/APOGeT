@@ -6,8 +6,6 @@
 #include "ptgraphbuilder.h"
 #include "graphicutils.h"
 
-#include <QDebug>
-
 namespace gui {
 
 // ============================================================================
@@ -26,7 +24,6 @@ static constexpr uint LEGEND_TICKS = 4;
 static constexpr float NODE_RADIUS = 10;
 static constexpr float NODE_MARGIN = 2;
 static constexpr float NODE_SIZE = 2 * (NODE_RADIUS + NODE_MARGIN);
-static constexpr float NODE_SPACING = NODE_SIZE / 2;
 
 static constexpr float END_POINT_SIZE = NODE_RADIUS / 4;
 
@@ -85,9 +82,7 @@ struct PolarCoordinates {
   }
 
   /// \returns the coordinate of node number \p i
-  static float xCoord (uint i) {
-    return i * NODE_SIZE + (i > 0 ? i-1 : 0) * NODE_SPACING;
-  }
+  static float xCoord (uint i) {  return i * NODE_SIZE; }
 
   /// Creates a polar coordinates object with the specified unscaled \p width
   PolarCoordinates (double width)
@@ -406,10 +401,8 @@ void PTGraphBuilder::updateLayout (GUIItems &items) {
   uint visible = 0;
   for (const gui::Node *n: items.nodes)  visible += n->subtreeVisible();
 
-  qDebug() << "Updating layout for" << visible << "items";
-
   if (visible > 0) {
-    double width = PolarCoordinates::xCoord(visible-1);
+    double width = PolarCoordinates::xCoord(visible);
     PolarCoordinates pc (width);
     updateLayout(items.root, pc);
   }
