@@ -24,8 +24,8 @@ std::istream& genotype::operator>> (std::istream &is, Sex &s) {
   switch (c) {
   case 'F': s = Sex::FEMALE; break;
   case 'M': s = Sex::MALE;   break;
+  default:  is.setstate(std::ios_base::failbit);
   }
-  is.setstate(std::ios_base::failbit);
   return is;
 }
 

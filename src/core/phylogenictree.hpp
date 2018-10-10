@@ -596,13 +596,13 @@ protected:
                     << ", c = " << ec.value << ")" << std::endl;
 
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[ec.value].id());
+          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[ec.than].id());
           callbacks->onGenomeEntersEnveloppe(species->id, g.id());
         }
-        species->enveloppe[ec.value] = g;
+        species->enveloppe[ec.than] = g;
         for (uint i=0; i<k; i++)
-          if (i != ec.value)
-            dist[{i,ec.value}] = dccache.distances[i];
+          if (i != ec.than)
+            dist[{i,ec.than}] = dccache.distances[i];
       }
     }
 

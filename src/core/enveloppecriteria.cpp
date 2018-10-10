@@ -28,10 +28,11 @@ void computeAvgAndStdDev (const DistanceMap &m, double &avg, double &stdDev) {
   stdDev = std::sqrt(stdDev / double(m.size()));
 }
 
+
 // Maximize average (has a known pitfall)
-EnveloppeContribution computeContribution (const DistanceMap &edist,
-                                           const std::vector<float> &gdist,
-                                           GID gid, const std::vector<GID> &ids) {
+EnveloppeContribution maxAverage (const DistanceMap &edist,
+                                  const std::vector<float> &gdist,
+                                  GID gid, const std::vector<GID> &ids) {
 
   const uint k = ids.size();
   EnveloppeContribution ec;
@@ -76,183 +77,98 @@ EnveloppeContribution computeContribution (const DistanceMap &edist,
 }
 
 // Just maximize min distance
-//EnveloppeContribution computeContribution (const DistanceMap &edist,
-//                                           const std::vector<float> &gdist,
-//                                           GID gid, const std::vector<GID> &ids) {
+EnveloppeContribution maxMinDist (const DistanceMap &edist,
+                                  const std::vector<float> &gdist,
+                                  GID gid, const std::vector<GID> &ids) {
 
-//  const uint k = ids.size();
+  const uint k = ids.size();
 
-//  EnveloppeContribution ec;
-//  ec.value = -std::numeric_limits<double>::max();
-//  ec.than = -1;
-//  ec.better = false;
+  EnveloppeContribution ec;
+  ec.value = -std::numeric_limits<double>::max();
+  ec.than = -1;
+  ec.better = false;
 
-//  const auto pad = [gid] {
-//    return std::setw(ceil(log10(std::underlying_type<GID>::type(gid))));
-//  };
+  const auto pad = [gid] {
+    return std::setw(ceil(log10(std::underlying_type<GID>::type(gid))));
+  };
 
-//  // Compare with each vertex
-//  for (uint i=0; i<k; i++) {
-//    if (Config::DEBUG() >= 2)
-//      std::cerr << "\t\tc(" << pad() << ids[i]
-//                << "/" << pad() << gid << ") =" << std::left;
+  // Compare with each vertex
+  for (uint i=0; i<k; i++) {
+    if (Config::DEBUG() >= 2)
+      std::cerr << "\t\tc(" << pad() << ids[i]
+                << "/" << pad() << gid << ") =" << std::left;
 
-//    float minBase = std::numeric_limits<float>::max(),
-//          minNew = std::numeric_limits<float>::max();
+    float minBase = std::numeric_limits<float>::max(),
+          minNew = std::numeric_limits<float>::max();
 
-//    for (uint j=0; j<k; j++) {
-//      if (i==j) continue;
-//      minBase = std::min(minBase, edist.at({i,j}));
-//      minNew = std::min(minNew, gdist.at(j));
-//    }
+    for (uint j=0; j<k; j++) {
+      if (i==j) continue;
+      minBase = std::min(minBase, edist.at({i,j}));
+      minNew = std::min(minNew, gdist.at(j));
+    }
 
-//    double c = - minBase + minNew;
+    double c = - minBase + minNew;
 
-//    if (Config::DEBUG() >= 2)
-//      std::cerr << " - " << std::setw(8) << minBase
-//                << " + " << std::setw(8) << minNew
-//                << " = " << std::setw(8) << c
-//                << std::endl;
+    if (Config::DEBUG() >= 2)
+      std::cerr << " - " << std::setw(8) << minBase
+                << " + " << std::setw(8) << minNew
+                << " = " << std::setw(8) << c
+                << std::endl;
 
-////      if (Config::DEBUG() >= 2) {
-////        std::cerr << std::left;
-////        if (j>0)  std::cerr << "\t\t  " << pad() << " "
-////                            << " " << pad() << " " << "   ";
-////        std::cerr << "\t"
-////                  << std::setw(8) << w << " * (";
-////        std::cerr << std::setw(9) << nc
-////                  << " + " << std::setw(8) << pc
-////                  << ")";
-////        if (j<k-2)  std::cerr << "\n";
-////      }
-////    }
-////    if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
+    if (ec.value < c) {
+      ec.value = c;
+      ec.than = i;
+    }
+  }
 
-//    if (ec.value < c) {
-//      ec.value = c;
-//      ec.than = i;
-//    }
-//  }
+  ec.better = (ec.value > 0);
+  return ec;
+}
 
-//  ec.better = (ec.value > 0);
-//  return ec;
-//}
+// Maximize mean distance while reducing deviation
+EnveloppeContribution maxAvgMinStdDev (const DistanceMap &edist,
+                                       const std::vector<float> &gdist,
+                                       GID gid, const std::vector<GID> &ids) {
 
-//// Maximize mean distance while reducing deviation
-//EnveloppeContribution computeContribution (const DistanceMap &edist,
-//                                           const std::vector<float> &gdist,
-//                                           GID gid, const std::vector<GID> &ids) {
+  const uint k = ids.size();
 
-//  const uint k = ids.size();
+  EnveloppeContribution ec;
+  ec.value = -std::numeric_limits<double>::max();
+  ec.than = -1;
+  ec.better = false;
 
-//  EnveloppeContribution ec;
-//  ec.value = -std::numeric_limits<double>::max();
-//  ec.than = -1;
-//  ec.better = false;
+  const auto pad = [gid] {
+    return std::setw(ceil(log10(std::underlying_type<GID>::type(gid))));
+  };
 
-//  const auto pad = [gid] {
-//    return std::setw(ceil(log10(std::underlying_type<GID>::type(gid))));
-//  };
+  // Average internal distance
+  double baseAVG, baseStdDev;
+  computeAvgAndStdDev(edist, baseAVG, baseStdDev);
 
-//  // Average internal distance
-//  double baseAVG, baseStdDev;
-//  computeAvgAndStdDev(edist, baseAVG, baseStdDev);
+  // Compare with each vertex
+  for (uint i=0; i<k; i++) {
+    if (Config::DEBUG() >= 2)
+      std::cerr << "\t\tc(" << pad() << ids[i]
+                << "/" << pad() << gid << ") =" << std::left;
 
-//  // Compare with each vertex
-//  for (uint i=0; i<k; i++) {
-//    if (Config::DEBUG() >= 2)
-//      std::cerr << "\t\tc(" << pad() << ids[i]
-//                << "/" << pad() << gid << ") =" << std::left;
+    DistanceMap newMap = edist;
+    for (uint j=0; j<k; j++)
+      if (i != j)
+        newMap.at({i,j}) = gdist[j];
 
-//    DistanceMap newMap = edist;
-//    for (uint j=0; j<k; j++)
-//      if (i != j)
-//        newMap.at({i,j}) = gdist[j];
+    double newAVG, newStdDev;
+    computeAvgAndStdDev(newMap, newAVG, newStdDev);
 
-//    double newAVG, newStdDev;
-//    computeAvgAndStdDev(newMap, newAVG, newStdDev);
+    double c = - baseAVG + newAVG
+               + baseStdDev - newStdDev;
 
-//    double c = - baseAVG + newAVG
-//               + baseStdDev - newStdDev;
-
-//    if (Config::DEBUG() >= 2)
-//      std::cerr << " - " << std::setw(8) << baseAVG
-//                << " + " << std::setw(8) << newAVG
-//                << " + " << std::setw(8) << baseStdDev
-//                << " - " << std::setw(8) << newStdDev
-//                << " = " << std::setw(8) << c
-//                << std::endl;
-
-////      if (Config::DEBUG() >= 2) {
-////        std::cerr << std::left;
-////        if (j>0)  std::cerr << "\t\t  " << pad() << " "
-////                            << " " << pad() << " " << "   ";
-////        std::cerr << "\t"
-////                  << std::setw(8) << w << " * (";
-////        std::cerr << std::setw(9) << nc
-////                  << " + " << std::setw(8) << pc
-////                  << ")";
-////        if (j<k-2)  std::cerr << "\n";
-////      }
-////    }
-////    if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
-
-//    if (ec.value < c) {
-//      ec.value = c;
-//      ec.than = i;
-//    }
-//  }
-
-//  ec.better = (ec.value > 0);
-//  return ec;
-//}
-
-
-// Weighted by distance to mean. Shitty
-//EnveloppeContribution computeContribution (const DistanceMap &edist,
-//                                           const std::vector<float> &gdist,
-//                                           GID gid, const std::vector<GID> &ids) {
-
-//  const uint k = ids.size();
-//  EnveloppeContribution ec;
-//  ec.value = -std::numeric_limits<double>::max();
-//  ec.than = -1;
-//  ec.better = false;
-
-//  const auto pad = [gid] {
-//    return std::setw(ceil(log10(std::underlying_type<GID>::type(gid))));
-//  };
-
-//  // Average internal distance
-//  double A = 0;
-//  for (auto &it: edist)  A += it.second;
-//  A /= double(edist.size());
-
-//  //
-//  auto weight = [A] (double d) {
-//    return 1 - exp(- (d-A)*(d-A) / (2. * A * A / 16.));
-//  };
-
-//  // Compute variance contributions and least contributor
-//  for (uint i=0; i<k; i++) {
-//    std::vector<double> d_i (k), d_g(k);
-//    if (Config::DEBUG() >= 2)
-//      std::cerr << "\n\t\tc(" << pad() << ids[i]
-//                << "/" << pad() << gid << ") =";
-
-//    for (uint j=0; j<k; j++) {
-//      if (i == j) continue;
-//      d_i.push_back(edist.at({i,j}));
-//      d_g.push_back(gdist[j]);
-//    }
-
-//    double c = 0;
-//    const auto i_i = ordered(d_i), i_g = ordered(d_g);
-//    for (uint j=0; j<k-1; j++) {
-//      double nc = - d_i[i_i[j]];
-//      double pc = + d_g[i_g[j]];
-//      double w = weight(pc);
-//      c += w * (nc + pc);
+    if (Config::DEBUG() >= 2)
+      std::cerr << " - " << std::setw(8) << baseAVG
+                << " + " << std::setw(8) << newAVG
+                << " + " << std::setw(8) << baseStdDev
+                << " - " << std::setw(8) << newStdDev
+                << " = " << std::setw(8) << c
+                << std::endl;
 
 //      if (Config::DEBUG() >= 2) {
 //        std::cerr << std::left;
@@ -266,17 +182,103 @@ EnveloppeContribution computeContribution (const DistanceMap &edist,
 //        if (j<k-2)  std::cerr << "\n";
 //      }
 //    }
-
 //    if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
-//    if (ec.value < c) {
-//      ec.value = c;
-//      ec.than = i;
-//    }
-//  }
 
-//  ec.better = (ec.value > 0);
-//  return ec;
-//}
+    if (ec.value < c) {
+      ec.value = c;
+      ec.than = i;
+    }
+  }
 
+  ec.better = (ec.value > 0);
+  return ec;
+}
+
+// Weighted by distance to mean. Shitty
+EnveloppeContribution maxWeightedDist2Avg (const DistanceMap &edist,
+                                           const std::vector<float> &gdist,
+                                           GID gid, const std::vector<GID> &ids) {
+
+  const uint k = ids.size();
+  EnveloppeContribution ec;
+  ec.value = -std::numeric_limits<double>::max();
+  ec.than = -1;
+  ec.better = false;
+
+  const auto pad = [gid] {
+    return std::setw(ceil(log10(std::underlying_type<GID>::type(gid))));
+  };
+
+  // Average internal distance
+  double A = 0;
+  for (auto &it: edist)  A += it.second;
+  A /= double(edist.size());
+
+  //
+  auto weight = [A] (double d) {
+    return 1 - exp(- (d-A)*(d-A) / (2. * A * A / 16.));
+  };
+
+  // Compute variance contributions and least contributor
+  for (uint i=0; i<k; i++) {
+    std::vector<double> d_i (k), d_g(k);
+    if (Config::DEBUG() >= 2)
+      std::cerr << "\n\t\tc(" << pad() << ids[i]
+                << "/" << pad() << gid << ") =";
+
+    for (uint j=0; j<k; j++) {
+      if (i == j) continue;
+      d_i.push_back(edist.at({i,j}));
+      d_g.push_back(gdist[j]);
+    }
+
+    double c = 0;
+    const auto i_i = ordered(d_i), i_g = ordered(d_g);
+    for (uint j=0; j<k-1; j++) {
+      double nc = - d_i[i_i[j]];
+      double pc = + d_g[i_g[j]];
+      double w = weight(pc);
+      c += w * (nc + pc);
+
+      if (Config::DEBUG() >= 2) {
+        std::cerr << std::left;
+        if (j>0)  std::cerr << "\t\t  " << pad() << " "
+                            << " " << pad() << " " << "   ";
+        std::cerr << "\t"
+                  << std::setw(8) << w << " * (";
+        std::cerr << std::setw(9) << nc
+                  << " + " << std::setw(8) << pc
+                  << ")";
+        if (j<k-2)  std::cerr << "\n";
+      }
+    }
+
+    if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
+    if (ec.value < c) {
+      ec.value = c;
+      ec.than = i;
+    }
+  }
+
+  ec.better = (ec.value > 0);
+  return ec;
+}
+
+
+EnveloppeContribution computeContribution (const DistanceMap &edist,
+                                           const std::vector<float> &gdist,
+                                           GID gid, const std::vector<GID> &ids) {
+  auto f = computeContribution;
+  switch (Config::ENV_CRIT()) {
+  case 0: f = maxAverage;           break;
+  case 1: f = maxMinDist;           break;
+  case 2: f = maxAvgMinStdDev;      break;
+  case 3: f = maxWeightedDist2Avg;  break;
+  default:
+    throw std::logic_error("No function for this use case");
+  }
+  assert(f != computeContribution);
+  return f(edist, gdist, gid, ids);
+}
 }
 }
