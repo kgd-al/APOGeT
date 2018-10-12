@@ -31,6 +31,7 @@ add_library(apt-core STATIC
     "src/core/crossover.cpp"
     "src/core/treetypes.hpp"
     "src/core/phylogenictree.hpp"
+    "src/core/enveloppecriteria.cpp"
     "src/core/ptreeconfig.h"
     "src/core/ptreeconfig.cpp"
 )

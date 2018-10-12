@@ -169,10 +169,10 @@ public:
   }
 
   /// \returns this graphics item bounding box
-  QRectF boundingRect(void) const;
+  QRectF boundingRect(void) const override;
 
   /// Paints this node through the provided painter
-  void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*);
+  void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
 };
 Q_DECLARE_OPERATORS_FOR_FLAGS(Node::Visibilities)
 

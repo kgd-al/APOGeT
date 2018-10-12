@@ -34,6 +34,9 @@ struct CFILE : public ConfigFile<CFILE> {
   /// Whether to bother drawing extinct paths
   DECLARE_PARAMETER(bool, winningPathOnly)
 
+  /// (Debug) selector for the enveloppe criteria
+  DECLARE_DEBUG_PARAMETER(int, ENV_CRIT, 0)
+
   /// Debug constant (compile-constant equal to false in all but debug builds)
   DECLARE_DEBUG_PARAMETER(int, DEBUG, 0)
 };

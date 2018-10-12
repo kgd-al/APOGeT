@@ -88,6 +88,73 @@ struct SpeciesData {
   }
 };
 
+namespace _details {
+
+/// Distance & compatibilities cache
+struct DCCache {
+  /// Cache collection of distances
+  std::vector<float> distances;
+
+  /// Cache collection of compatibilities
+  std::vector<float> compatibilities;
+
+  /// Remove all contents
+  void clear (void) {
+    distances.clear(),  compatibilities.clear();
+  }
+
+  /// Prepare exactly \p n units of storage space
+  void reserve (uint n) {
+    distances.reserve(n), compatibilities.reserve(n);
+  }
+
+  /// Append values
+  void push_back (float d, float c) {
+    distances.push_back(d), compatibilities.push_back(c);
+  }
+
+  /// \returns the size of the cache
+  size_t size (void) const {
+    assert(distances.size() == compatibilities.size());
+    return distances.size();
+  }
+};
+
+
+/// Helper structure for ensuring that the pair values are ordered
+///
+/// \tparam T stored type
+template <typename T>
+struct ordered_pair {
+  T first;  ///< First value (lower or equal to second)
+  T second; ///< Second value (greater or equal to first)
+
+  /// Create an ordered pair from un-ordered pair of values
+  ordered_pair(T first, T second)
+    : first(std::min(first, second)), second(std::max(first, second)) {}
+
+  /// Compare two ordered_pairs in lexicographic order
+  friend bool operator< (const ordered_pair &lhs, const ordered_pair &rhs) {
+    if (lhs.first != rhs.first) return lhs.first < rhs.first;
+    return lhs.second < rhs.second;
+  }
+};
+using DistanceMap = std::map<ordered_pair<uint>, float>;
+
+struct EnveloppeContribution {
+  bool better;
+  uint than;
+  float value;
+};
+
+using GID = genotype::BOCData::GID;
+
+EnveloppeContribution computeContribution(const DistanceMap &edist,
+                                          const std::vector<float> &gdist,
+                                          GID gid, const std::vector<GID> &ids);
+
+} // end of namespace _details
+
 /// When kept informed about the birth/death and stepping events of a simulation
 /// this struct can generate a valid, complete, record of all species event
 /// with informations on both the hierarchical and invididual dynamics
@@ -111,6 +178,9 @@ public:
 
   /// Helper alias for the configuration data
   using Config = config::PTree;
+
+
+  using DCCache = _details::DCCache;
 
   /// Create an empty PTree
   PhylogenicTree(void) {
@@ -209,7 +279,8 @@ public:
     else if (Config::ignoreHybrids()) {
       if (Config::DEBUG() >= 0)
         std::cerr << "Linking hybrid genome "
-                  << g.id() << " to mother species" << std::endl;
+                  << g.id() << " to mother species (" << mSID << "). Ignoring "
+                  << "father species (" << pSID << ")" << std::endl;
 
       return addGenome(g, _nodes[i_id]);
 
@@ -263,25 +334,6 @@ protected:
     return curr;
   }
 
-  /// Helper structure for ensuring that the pair values are ordered
-  ///
-  /// \tparam T stored type
-  template <typename T>
-  struct ordered_pair {
-    T first;  ///< First value (lower or equal to second)
-    T second; ///< Second value (greater or equal to first)
-
-    /// Create an ordered pair from un-ordered pair of values
-    ordered_pair(T first, T second)
-      : first(std::min(first, second)), second(std::max(first, second)) {}
-
-    /// Compare two ordered_pairs in lexicographic order
-    friend bool operator< (const ordered_pair &lhs, const ordered_pair &rhs) {
-      if (lhs.first != rhs.first) return lhs.first < rhs.first;
-      return lhs.second < rhs.second;
-    }
-  };
-
   struct Node;
 
   /// Smart pointer (shared) to a species node
@@ -301,7 +353,7 @@ protected:
     std::vector<GENOME> enveloppe;
 
     /// Cache map for the intra-enveloppe distances
-    std::map<ordered_pair<uint>, float> distances;
+    _details::DistanceMap distances;
 
     /// Create a node with \p id and \p parent
     Node (SID id, Node_ptr parent) : id(id), parent(parent.get()) {}
@@ -328,36 +380,6 @@ protected:
         os << "\t" << id << " -> " << n->id << ";\n";
         n->logTo(os);
       }
-    }
-  };
-
-  /// Distance & compatibilities cache
-  struct DCCache {
-    /// Cache collection of distances
-    std::vector<float> distances;
-
-    /// Cache collection of compatibilities
-    std::vector<float> compatibilities;
-
-    /// Remove all contents
-    void clear (void) {
-      distances.clear(),  compatibilities.clear();
-    }
-
-    /// Prepare exactly \p n units of storage space
-    void reserve (uint n) {
-      distances.reserve(n), compatibilities.reserve(n);
-    }
-
-    /// Append values
-    void push_back (float d, float c) {
-      distances.push_back(d), compatibilities.push_back(c);
-    }
-
-    /// \returns the size of the cache
-    size_t size (void) const {
-      assert(distances.size() == compatibilities.size());
-      return distances.size();
     }
   };
 
@@ -526,19 +548,6 @@ protected:
     return matable >= Config::similarityThreshold() * k;
   }
 
-  /// \returns a vector of indices into \p values allowing sorted access
-  template <typename T>
-  static std::vector<size_t> ordered(std::vector<T> const& values) {
-    std::vector<size_t> indices(values.size());
-    std::iota(begin(indices), end(indices), static_cast<size_t>(0));
-
-    std::sort(
-      begin(indices), end(indices),
-      [&values](size_t a, size_t b) { return values[a] > values[b]; }
-    );
-    return indices;
-  }
-
   /// Insert \p g into node \p species, possibly changing the enveloppe.
   ///
   /// Callbacks:
@@ -567,81 +576,33 @@ protected:
     } else {
       /// \todo cache these computations (variances, least contributing)
       assert(k == Config::enveloppeSize());
-
-      double maxContribution = -std::numeric_limits<double>::max();
-      uint leastContributor = -1;
-
-      const auto pad = [&g] {
-        return std::setw(ceil(log10(std::underlying_type<GID>::type(g.id()))));
-      };
-
-      // Compute variance contributions and least contributor
-      for (uint i=0; i<k; i++) {
-        std::vector<double> d_i (k), d_g(k);
-        if (Config::DEBUG() >= 2)
-          std::cerr << "\n\t\tc(" << pad() << species->enveloppe[i].id()
-                    << "/" << pad() << g.id() << ") =";
-
-        for (uint j=0; j<k; j++) {
-          if (i == j) continue;
-          d_i.push_back(dist.at({i,j}));
-          d_g.push_back(dccache.distances[j]);
-
-          double d_ij = distance(species->enveloppe[i], species->enveloppe[j]);
-          assert(fabs(dist.at({i,j}) - d_ij) < 1e-3);
-
-          double d_gj = distance(g, species->enveloppe[j]);
-          assert(fabs(dccache.distances[j] - d_gj) < 1e-3);
-        }
-
-        double c = 0;
-        const double N = k*(k-1)/2;
-        const auto i_i = ordered(d_i), i_g = ordered(d_g);
-        for (uint j=0; j<k-1; j++) {
-          c += (j+1) * (
-            - d_i[i_i[j]] + d_g[i_g[j]]
-          )/ N;
-
-          if (Config::DEBUG() >= 2) {
-            std::cerr << std::left;
-            if (j>0)  std::cerr << "\t\t  " << pad() << " "
-                                << " " << pad() << " " << "   ";
-            std::cerr << "\t(" << j+1 << "/" << N << ") * (- "
-                      << std::setw(8) << d_i[i_i[j]]
-                      << " + " << std::setw(8) << d_g[i_g[j]] << ")";
-            if (j<k-2)  std::cerr << "\n";
-          }
-        }
-
-        if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
-        if (maxContribution < c) {
-          maxContribution = c;
-          leastContributor = i;
-        }
-      }
+      std::vector<GID> ids (k);
+      for (uint i=0; i<k; i++)  ids[i] = species->enveloppe[i].id();
+      _details::EnveloppeContribution ec =
+          computeContribution(dist, dccache.distances, g.id(), ids);
 
       // Genome inside the enveloppe. Nothing to do
-      if (maxContribution <= 0) {
+      if (!ec.better) {
         if (Config::DEBUG())
-          std::cerr << "\t" << g.id() << "'s variance contribution is too low ("
-                    << maxContribution << ")" << std::endl;
+          std::cerr << "\t" << g.id() << "'s contribution is too low ("
+                    << ec.value << ")" << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
         if (Config::DEBUG())
-          std::cerr << "\t" << g.id() << "'s variance contribution is better "
-                    << "than enveloppe point " << leastContributor << " (id: "
-                    << species->enveloppe[leastContributor].id()
-                    << ", c = " << maxContribution << ")" << std::endl;
+          std::cerr << "\t" << g.id() << "'s contribution is better "
+                    << "than enveloppe point " << ec.than << " (id: "
+                    << species->enveloppe[ec.than].id()
+                    << ", c = " << ec.value << ")" << std::endl;
 
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[leastContributor].id());
+          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[ec.than].id());
           callbacks->onGenomeEntersEnveloppe(species->id, g.id());
         }
-        species->enveloppe[leastContributor] = g;
+        species->enveloppe[ec.than] = g;
         for (uint i=0; i<k; i++)
-          if (i != leastContributor)
-            dist[{i,leastContributor}] = dccache.distances[i];
+          if (i != ec.than)
+            dist[{i,ec.than}] = dccache.distances[i];
       }
     }
 
