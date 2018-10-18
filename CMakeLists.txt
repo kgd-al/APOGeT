@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.4)
 
 ################################################################################
 ## General settings
@@ -8,11 +8,7 @@ cmake_minimum_required(VERSION 2.8)
 project("apt")
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic")#"-ftime-report")
 
-if (${CMAKE_VERSION} VERSION_LESS 3.1)
-    set(CMAKE_CXX_FLAGS "-std=c++17 ${CMAKE_CXX_FLAGS}")
-else ()
-    set(CMAKE_CXX_STANDARD 17)
-endif ()
+set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
