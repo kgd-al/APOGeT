@@ -251,9 +251,17 @@ template <> struct SAG_CONFIG_FILE(BOCData) {
 
 namespace genotype {
 
+namespace _details {
+template <typename T, typename = void>
+struct requiresAlignment : std::false_type {};
+
+template <typename T>
+struct requiresAlignment<T, std::void_t<typename T::Alignment>> : std::true_type {};
+}
+
 /// Crossing of \p mother and \p father.
 /// The algorithm is:
-///   - Compute the distance based on the genomes and alignment
+///   - Compute the genomic distqnce
 ///   - Request a compatiblity rating \p r from the mother based on this distance
 ///   - Toss coin with success probability \p r
 ///     - if unsuccessfull, bail-out
@@ -268,7 +276,7 @@ namespace genotype {
 /// Untouched otherwise
 /// \param dice Source of randomness.
 template <typename GENOME>
-bool
+std::enable_if_t<!_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
                      GENOME &child, rng::AbstractDice &dice) {
 
@@ -309,9 +317,9 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
 /// Untouched otherwise
 /// \param dice Source of randomness.
 template <typename GENOME>
-std::enable_if_t<std::is_same<std::void_t<typename GENOME::Alignment>, void>::value, bool>
+std::enable_if_t<_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
-                     GENOME &child, rng::AbstractDice &dice) {
+                      GENOME &child, rng::AbstractDice &dice) {
 
   typename GENOME::Alignment alg = align(mother, father);
 

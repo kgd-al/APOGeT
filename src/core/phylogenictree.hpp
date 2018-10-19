@@ -139,16 +139,25 @@ struct ordered_pair {
     return lhs.second < rhs.second;
   }
 };
+
+/// Helper type to a map indexed by ordered pairs
+/// @see ordered_pair
 using DistanceMap = std::map<ordered_pair<uint>, float>;
 
+/// Describes the increase obtained when replacing an enveloppe point by an
+/// incoming genome
 struct EnveloppeContribution {
-  bool better;
-  uint than;
-  float value;
+  bool better;  ///< Did we find a point that should be replaced ?
+  uint than;    ///< If we found a point that should be replaced, this is its index
+  float value;  ///< The replacement score (>=0) indicates that a replacement should occur
 };
 
+/// Helper alias to the genome identificators type
 using GID = genotype::BOCData::GID;
 
+/// Computes the best increase (according to the criterion specified in
+///  config::PTree::ENV_CRIT) when replacing an individual from the enveloppe with
+/// genome \p gid
 EnveloppeContribution computeContribution(const DistanceMap &edist,
                                           const std::vector<float> &gdist,
                                           GID gid, const std::vector<GID> &ids);
@@ -179,7 +188,7 @@ public:
   /// Helper alias for the configuration data
   using Config = config::PTree;
 
-
+  /// Helper alias for the distance/compatibilites cache type
   using DCCache = _details::DCCache;
 
   /// Create an empty PTree

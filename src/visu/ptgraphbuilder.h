@@ -199,7 +199,7 @@ struct Path : public QGraphicsItem {
   }
 
   /// \copydoc Node::paint
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *);
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
 };
 
 /// Graphics item representing a Node lifespan
@@ -219,7 +219,7 @@ struct Timeline : public QGraphicsItem {
   void invalidatePath (void);
 
   /// \copydoc Node::boundingRect
-  QRectF boundingRect() const {
+  QRectF boundingRect() const override {
     return shape().boundingRect();
   }
 
@@ -227,7 +227,7 @@ struct Timeline : public QGraphicsItem {
   QPainterPath shape (void) const override;
 
   /// \copydoc Node::paint
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *);
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
 };
 
 /// Graphics item managing the graph's boundaries and legend

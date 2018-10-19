@@ -21,6 +21,16 @@ set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
 find_package(tools REQUIRED)
 include_directories(${tools_INCLUDE_DIRS})
 
+
+####################################################################################################
+## Managing uneven support of std 17 filesystem
+####################################################################################################
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  link_directories(/usr/local/opt/llvm/lib/)
+  message(STATUS "> Linking against manual clang installation")
+endif()
+
 ################################################################################
 ## Static libraries
 ################################################################################
@@ -105,7 +115,10 @@ if(WITH_DEBUG_INFO)
     # Enable small memory error detector (fuse=gold fixes linker errors)
 #    set(ASAN "-fsanitize=thread")
     set(ASAN "-fsanitize=address -fsanitize=undefined")
-    set(CMAKE_CXX_FLAGS "${ASAN} -fno-omit-frame-pointer -fuse-ld=gold ${CMAKE_CXX_FLAGS}")
+    string(APPEND CMAKE_CXX_FLAGS " ${ASAN} -fno-omit-frame-pointer")
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        string(APPEND CMAKE_CXX_FLAGS " -fuse-ld=gold")
+    endif()
 endif()
 
 option(BUILD_TESTS "Sets whether to build the tests executables" OFF)

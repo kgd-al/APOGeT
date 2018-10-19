@@ -188,7 +188,9 @@ void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) 
 // == Path between a parent and child node
 // ============================================================================
 
-Path::Path(Node *start, Node *end) : _start(start), _end(end) {}
+Path::Path(Node *start, Node *end) : _start(start), _end(end) {
+  setZValue(PATHS_LEVEL);
+}
 
 void Path::invalidatePath(void) {
   prepareGeometryChange();
@@ -293,7 +295,7 @@ Border::Border (double height)
 
   empty = (height == 0);
   updateShape();
-  setZValue(-10);
+  setZValue(BOUNDS_LEVEL);
 }
 
 void Border::updateShape(void) {
