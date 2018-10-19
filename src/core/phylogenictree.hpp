@@ -348,12 +348,29 @@ protected:
   /// Smart pointer (shared) to a species node
   using Node_ptr = std::shared_ptr<Node>;
 
+  /// Contributor field for a species node
+  class NodeContributor {
+    Node *species;  ///< Reference to the contributor
+    uint count; ///< Number of contributions
+
+  public:
+    /// Constructor
+    NodeContributor(Node *species) : species(species) {}
+
+    /// Increment the number of contributions
+    NodeContributor& operator++(void) {
+      count++;
+      return *this;
+    }
+  };
+  using Contributors = std::vector<NodeContributor>;
+
   /// Species node
   struct Node {
     SID id; ///< Species identificator
     SpeciesData data; ///< Species additionnal data
 
-    Node *parent; ///< Species parent (if any)
+    Contributors contributors;
 
     /// Subspecies of this node
     std::vector<Node_ptr> children;
@@ -366,6 +383,8 @@ protected:
 
     /// Create a node with \p id and \p parent
     Node (SID id, Node_ptr parent) : id(id), parent(parent.get()) {}
+
+
 
     /// Stream this node. Mostly for debugging purpose.
     friend std::ostream& operator<< (std::ostream &os, const Node &n) {
