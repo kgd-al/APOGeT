@@ -73,6 +73,11 @@ signals:
   /// Emitted when a species starts/stops being hovered
   void onSpeciesHoverEvent (SID sid, bool entered);
 
+  /// Emitted when a species has changed its rooting point
+  /// \copydetails phylogeny::Callbacks_t::onMajorContributorChanged
+  void onMajorContributorChanged (SID sid, SID oldMC, SID newMC);
+
+
 protected slots:
   // ===========================================================================
   // Callbacks from PTree
@@ -80,14 +85,14 @@ protected slots:
   /// Process a step event (new timestamp/living species)
   void treeStepped (uint step, const LivingSet &living);
 
-  /// Move to template version (need to provide the node)
-//  void newSpecies (uint pid, uint sid);
-
   /// Process a enveloppe change event
   void genomeEntersEnveloppe (SID sid, GID gid);
 
   /// \copydoc genomeEntersEnveloppe
   void genomeLeavesEnveloppe (SID sid, GID gid);
+
+  /// Process a rooting change event
+  void majorContributorChanged(SID sid, SID oldMC, SID newMC);
 
   // ===========================================================================
   // Config update
@@ -294,6 +299,15 @@ struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
   void onGenomeLeavesEnveloppe (SID sid, GID gid) {
     viewer->genomeLeavesEnveloppe(sid, gid);
     emit viewer->onGenomeLeavesEnveloppe(sid, gid);
+  }
+
+  /// Notify both the viewer and the outside world that a species of the
+  /// associated tree has changed its rooting point
+  ///
+  /// \copydetails phylogeny::Callbacks_t::onMajorContributorChanged
+  void onMajorContributorChanged (SID sid, SID oldMC, SID newMC) {
+    viewer->majorContributorChanged(sid, oldMC, newMC);
+    emit viewer->onMajorContributorChanged(sid, oldMC, newMC);
   }
 
 private:

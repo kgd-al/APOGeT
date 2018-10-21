@@ -9,7 +9,6 @@
 #include <cassert>
 #include <iostream>
 
-#include "kgd/external/json.hpp"
 #include "treetypes.hpp"
 #include "ptreeconfig.h"
 #include "crossover.h"
@@ -81,12 +80,12 @@ struct SpeciesData {
   uint count;
 
   /// Serialize to json
-  friend void to_json (nlohmann::json &j, const SpeciesData &d) {
+  friend void to_json (TreeTypes::json &j, const SpeciesData &d) {
     j = {d.firstAppearance, d.lastAppearance, d.count};
   }
 
   /// Deserialize from json
-  friend void from_json (const nlohmann::json &j, SpeciesData &d) {
+  friend void from_json (const TreeTypes::json &j, SpeciesData &d) {
     uint i=0;
     d.firstAppearance = j[i++];
     d.lastAppearance = j[i++];
@@ -177,6 +176,8 @@ EnveloppeContribution computeContribution(const DistanceMap &edist,
 template <typename GENOME>
 class PhylogenicTree {
 public:
+  /// \copydoc TreeTypes::json
+  using json = TreeTypes::json;
 
   /// Helper alias for the genome identificator
   using GID = genotype::BOCData::GID;
@@ -268,14 +269,14 @@ public:
   /// \return The species \p g was added to
   SID addGenome (const GENOME &g) {
     // Ensure that the root exists
-    if (!_root) _root = makeNode(nullptr);
+    if (!_root) _root = makeNode(SpeciesContribution{});
 
     // Retrieve parent's species
     /// \todo this should not fail on initialization data (SID == -1)
     SID mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
         fSID = _idToSpecies.parentSID(g, Parent::FATHER);
 
-    Node *s0 = nullptr, *s1 = nullptr;
+    Node_ptr s0 = nullptr, s1 = nullptr;
     if (mSID == SID::INVALID && fSID == SID::INVALID)
       s0 = _root;
 
@@ -287,7 +288,7 @@ public:
       s1 = _nodes[fSID];
     }
 
-    Node *species = addGenome(g, s0, s1, {mSID, fSID});
+    auto species = addGenome(g, s0, s1, {mSID, fSID});
     return species->id;
   }
 
@@ -343,6 +344,9 @@ protected:
     uint _count; ///< Number of contributions
 
   public:
+    /// No-argument contructor
+    NodeContributor(void) : NodeContributor(nullptr, -1) {}
+
     /// Constructor
     NodeContributor(Node_ptr species, uint initialCount)
       : _speciesID(species->id), _count(initialCount) {}
@@ -363,6 +367,19 @@ protected:
       // bigger contributions go first in the array
       return !(lhs._count < rhs._count);
     }
+
+
+    /// Serialize Contributor \p c into a json
+    friend void to_json (json &j, const NodeContributor &c) {
+      j = {c._speciesID, c._count};
+    }
+
+    /// Deserialize Contributor \p c from json \p j
+    friend void from_json (const json &j, NodeContributor &c) {
+      uint i=0;
+      c._speciesID = j[i++];
+      c._count = j[i++];
+    }
   };
 
   /// Sorted collection of contributors for a species node
@@ -370,38 +387,38 @@ protected:
     /// The buffer containing the individual contributions
     std::vector<NodeContributor> vec;
 
-    /// The associated node
-    Node *node;
+    /// The associated node identificator
+    SID nodeID;
 
-    /// The main contributor
+    /// The main contributor (cached value)
     Node *main;
-
-    /// Update the main contributor cached variable
-    void updateMain (const Nodes &nodes) {
-      assert(!vec.empty());
-
-      uint i=0;
-      SID sid = SID::INVALID;
-      while(sid != node->id && i<vec.size())
-        sid = vec[i++].speciesID();
-      main = (sid == SID::INVALID ? nullptr : nodes[sid].get());
-    }
 
   public:
     /// Alias for the data structure containing the contributing SIDs
     using Contribution = std::multiset<SID>;
 
+    /// No-argument constructor. Leaves the class in an invalid state
+    Contributors (void) : Contributors(SID::INVALID) {}
+
     /// Constructor. Registers the node whose contributor collection it manages
-    Contributors (Node *n) : node(n), main(nullptr) {}
+    Contributors (SID id) : nodeID(id), main(nullptr) {}
+
+    /// \return The id of the monitored node
+    SID getNodeID (void) const {
+      return nodeID;
+    }
 
     /// \return The main contributor, i.e. with highest number of contributions
     Node* getMain (void) const {
+      assert(nodeID != SID::INVALID);
       return main;
     }
 
     /// Register new contributions, updates internal data and returns the new
     /// main contributor
     Node* update (Contribution sids, const Nodes &nodes) {
+      assert(nodeID != SID::INVALID);
+
       uint i=0;
       uint processed = 0;
 
@@ -437,8 +454,33 @@ protected:
       // sort by decreasing contribution
       std::stable_sort(vec.begin(), vec.end());
 
-      updateMain(nodes);
+      return updateMain(nodes);
+    }
+
+
+    /// Update the main contributor cached variable
+    Node* updateMain (const Nodes &nodes) {
+      assert(nodeID != SID::INVALID);
+
+      uint i=0;
+      SID sid = SID::INVALID;
+      while(sid != nodeID && i<vec.size())
+        sid = vec[i++].speciesID();
+      main = (sid == SID::INVALID ? nullptr : nodes[sid].get());
       return main;
+    }
+
+
+    /// Serialize Contributors \p c into a json
+    friend void to_json (json &j, const Contributors &c) {
+      j = {c.nodeID, c.vec};
+    }
+
+    /// Deserialize Contributors \p c from json \p j
+    friend void from_json (const json &j, Contributors &c) {
+      uint i=0;
+      c.nodeID = j[i++];
+      c.vec = j[i++].get<decltype(Contributors::vec)>();
     }
   };
 
@@ -463,7 +505,7 @@ protected:
     _details::DistanceMap distances;
 
     /// Create a node with \p id and \p parent
-    Node (SID id) : id(id), contributors(this) {}
+    Node (SID id) : id(id), contributors(id) {}
 
     /// \returns the main contributor for this species (excluding itself)
     Node* parent (void) {
@@ -515,9 +557,11 @@ protected:
 
     /// Queries for the parent species identificator for a genome.
     /// Updates internal reference counter.
-    /// \return The species identificator of \p g 's parent \p p
-    /// \warning \p g must have a valid parent \p p
+    /// \return The species identificator of \p g 's parent \p p or SID::INVALID
+    /// if \p g does not have such a parent
     SID parentSID (const GENOME &g, Parent p) {
+      if (!g.hasParent(p))  return SID::INVALID;
+
       auto &d = map.at(g.parent(p));
       d.refCount++;
       return d.species;
@@ -576,23 +620,40 @@ protected:
   uint _hybrids;  ///< Number of hybrids encountered thus far \todo WIP
   uint _step; ///< Current timestep for this tree
 
-  /// Create a smart pointer to a node created on-the-fly under \p parent
+  /// Create a smart pointer to a node created on-the-fly with contributors
+  /// as described in \p initialContrib
   /// Callbacks:
   ///   - Callbacks_t::onNewSpecies
-  Node_ptr makeNode (const SpeciesContribution &initialContrib) {
-    Node_ptr p = std::make_shared<Node>(nextNodeID());
+  Node_ptr makeNode (Contributors &&initialContrib,
+                     bool withCallbacks = true) {
+
+    Node_ptr p = std::make_shared<Node>(initialContrib.getNodeID());
     p->data.firstAppearance = _step;
     p->data.lastAppearance = _step;
     p->data.count = 1;
-    p->contributors.update(initialContrib, _nodes);
+    p->contributors = initialContrib;
+
+    assert(p->contributors.getNodeID()
+           == SID(std::underlying_type<SID>::type(_nextNodeID)-1));
 
     _nodes.push_back(p);
 
     Node *parent = p->parent();
     if (parent) parent->children.push_back(p);
-    if (_callbacks)  _callbacks->onNewSpecies(parent ? parent->id : SID::INVALID, p->id);
+    if (_callbacks && withCallbacks)
+      _callbacks->onNewSpecies(parent ? parent->id : SID::INVALID, p->id);
 
     return p;
+  }
+
+  /// \overload
+  /// The species contribution monitor is build on the fly with the provided
+  /// contributions
+  Node_ptr makeNode (const SpeciesContribution &contrib) {
+    SID id = nextNodeID();
+    Contributors c (id);
+    c.update(contrib, _nodes);
+    return makeNode(std::move(c));
   }
 
   /// \copydoc nodeAt
@@ -602,8 +663,8 @@ protected:
 
   /// Find the appropriate place for \p g in the subtree(s) rooted at
   ///  \p species0 (and species1)
-  Node* addGenome (const GENOME &g, Node *species0, Node *species1,
-                   const SpeciesContribution &contrib) {
+  Node_ptr addGenome (const GENOME &g, Node_ptr species0, Node_ptr species1,
+                      const SpeciesContribution &contrib) {
 
     if (Config::DEBUG()) {
       std::cerr << "Attempting to add genome " << g.id()
@@ -616,15 +677,15 @@ protected:
     }
 
     DCCache dccache, bestSpeciesDCCache;
-    Node *bestSpecies = nullptr;
+    Node_ptr bestSpecies = nullptr;
     float bestScore = -std::numeric_limits<float>::max();
 
-    std::vector<Node*> species;
+    std::vector<Node_ptr> species;
     species.push_back(species0);
     if (species1) species.push_back(species0);
 
     // Find best top-level species
-    for (Node *s: species) {
+    for (Node_ptr s: species) {
       float score = speciesMatchingScore(g, s, dccache);
       if (bestScore < score) {
         bestSpecies = s;
@@ -645,7 +706,8 @@ protected:
     }
 
     // Find best derived species
-    uint i=0, k = 0, max = species0->children.size();
+    uint i=0, k = 0;
+    size_t max = species0->children.size();
     if (species1) max = std::max(max, species1->children.size());
     while (bestScore <= 0 && i < max) {
       Node_ptr &subspecies = species[k]->children[i];
@@ -656,7 +718,7 @@ protected:
         bestSpeciesDCCache = dccache;
       }
 
-      if (!species1 || species[1-k]->size() <= i)
+      if (!species1 || species[1-k]->children.size() <= i)
         i++;
       else {
         if (k==1) i++;
@@ -802,50 +864,54 @@ protected:
 private:
   /// Rebuilds PTree hierarchy and internal structure based on the contents of
   /// json \p j
-  Node_ptr rebuildHierarchy(Node_ptr parent, const nlohmann::json &j) {
-    Node_ptr n = makeNode(parent);
-    /// \todo careful not to forget to maintain contributors
+  Node_ptr rebuildHierarchy(const json &j) {
+    Contributors c = j["contribs"];
+    c.updateMain(_nodes);
 
-    uint i=0;
-    n->id = j[i++];
-    n->data = j[i++];
-    n->enveloppe = j[i++].get<decltype(Node::enveloppe)>();
-    const nlohmann::json jd = j[i++];
-    const nlohmann::json jc = j[i++];
+    Node_ptr n = makeNode(std::move(c), false);
+
+    n->id = j["id"];
+    n->data = j["data"];
+    n->enveloppe = j["envlp"].get<decltype(Node::enveloppe)>();
+    const json jd = j["dists"];
+    const json jc = j["children"];
 
     for (const auto &d: jd)
       n->distances[{d[0], d[1]}] = d[2];
 
     for (const auto &c: jc)
-      rebuildHierarchy(n, c);
+      rebuildHierarchy(c);
 
     return n;
   }
 
 public:
   /// Serialise PTree \p pt into a json
-  friend void to_json (nlohmann::json &j, const PhylogenicTree &pt) {
+  friend void to_json (json &j, const PhylogenicTree &pt) {
     j = {pt._step, *pt._root};
   }
 
   /// Serialize Node \p n into a json
-  friend void to_json (nlohmann::json &j, const Node &n) {
-    nlohmann::json jd;
+  friend void to_json (json &j, const Node &n) {
+    json jd;
     for (const auto &d: n.distances) jd.push_back({d.first.first, d.first.second, d.second});
 
-    nlohmann::json jc;
+    json jc;
     for (const auto &c: n.children) jc.push_back(*c);
 
-    /// \todo careful not to forget to maintain contributors
-
-    j = {n.id, n.data, n.enveloppe, jd, jc};
+    j["id"] = n.id;
+    j["data"] = n.data;
+    j["envlp"] = n.enveloppe;
+    j["contribs"] = n.contributors;
+    j["dists"] = jd;
+    j["children"] = jc;
   }
 
   /// Deserialise PTree \p pt from json \p j
-  friend void from_json (const nlohmann::json &j, PhylogenicTree &pt) {
+  friend void from_json (const json &j, PhylogenicTree &pt) {
     uint i=0;
     pt._step = j[i++];
-    pt._root = pt.rebuildHierarchy(nullptr, j[i++]);
+    pt._root = pt.rebuildHierarchy(j[i++]);
   }
 };
 

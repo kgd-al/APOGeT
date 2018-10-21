@@ -5,10 +5,14 @@
 #include <vector>
 #include <set>
 
+#include "kgd/external/json.hpp"
+
 namespace phylogeny {
 
 /// Helper container for the phylogeny-related types
 struct TreeTypes {
+  /// Helper alias to the json type used for (de)serialization
+  using json = nlohmann::json;
 
   /// Alias for the species identificator
   enum class SID : uint {
@@ -64,6 +68,11 @@ struct TreeTypes {
     /// Access an immutable element (with bounds checking)
     const auto& at (SID sid) const {
       return vec.at(SID_t(sid));
+    }
+
+    /// \return the size of the underlying buffer
+    auto size (void) const {
+      return vec.size();
     }
 
     /// \overload
