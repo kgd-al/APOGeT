@@ -28,9 +28,6 @@ struct CFILE : public ConfigFile<CFILE> {
   /// Whether to put extra effort in creating new species or plain singletons
   DECLARE_PARAMETER(bool, simpleNewSpecies)
 
-  /// What to do with hybrid individuals
-  DECLARE_PARAMETER(bool, ignoreHybrids)
-
   /// Whether to bother drawing extinct paths
   DECLARE_PARAMETER(bool, winningPathOnly)
 

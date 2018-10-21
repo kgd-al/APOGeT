@@ -298,8 +298,7 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
 ///     - otherwise generate a child through the appropriate crossover algorithm
 /// and potentially mutate it a bit.
 ///
-/// \todo FIXME No longer able to use with alignment requiering types. Forwarding
-/// to auto-field managers is a pain...
+/// \todo FIXME Forwarding to auto-field managers is a pain...
 ///
 /// \tparam GENOME The genome structure to cross
 ///

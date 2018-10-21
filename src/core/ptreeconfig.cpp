@@ -8,7 +8,6 @@ DEFINE_PARAMETER(double, compatibilityThreshold, .1)
 DEFINE_PARAMETER(double, similarityThreshold, .5)
 DEFINE_PARAMETER(uint, enveloppeSize, 5)
 DEFINE_PARAMETER(bool, simpleNewSpecies, true)
-DEFINE_PARAMETER(bool, ignoreHybrids, true)
 DEFINE_PARAMETER(bool, winningPathOnly, false)
 
 DEFINE_DEBUG_PARAMETER(int, ENV_CRIT, 1)
