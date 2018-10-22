@@ -9,9 +9,11 @@
 #include <cassert>
 #include <iostream>
 
-#include "treetypes.hpp"
-#include "ptreeconfig.h"
-#include "crossover.h"
+#include "../ptreeconfig.h"
+
+#include "treetypes.h"
+#include "node.hpp"
+#include "callbacks.hpp"
 
 /*!
  * \file phylogenictree.hpp
@@ -21,153 +23,6 @@
 
 namespace phylogeny {
 
-/// \cond internal
-
-/// Contains a set of functions called by the phylogenic tree when each of the
-/// corresponding events occur
-template <typename PT>
-struct Callbacks_t {
-  /// Alias to the genetic ID
-  using GID = typename PT::GID;
-
-  /// Alias to the species ID
-  using SID = typename PT::SID;
-
-  /// Alias to the collection of still-alive species id
-  using LivingSet = typename PT::LivingSet;
-
-  /// \brief Called when the PTree has been stepped.
-  ///
-  /// Provides the current step and the set of still-alive species
-  void onStepped (uint step, const LivingSet &living);
-
-  /// \brief Called to notify of a newly created species.
-  ///
-  /// Provides the identificators of both parent (if any) and new species
-  void onNewSpecies (SID pid, SID sid);
-
-  /// \brief Called when a genome is added to an enveloppe.
-  ///
-  /// Provides the id of the species whose enveloppe just changed and the id
-  /// of the newly inserted genome
-  void onGenomeEntersEnveloppe (SID sid, GID gid);
-
-  /// \brief Called when a genome is removed from an enveloppe.
-  ///
-  /// Provides the id of the species whose enveloppe just changed and the id
-  /// of the newly removed genome
-  void onGenomeLeavesEnveloppe (SID sid, GID gid);
-
-  /// \brief Called when a species' major contributor has changed
-  ///
-  /// Provides the id of the species whose major contributor just changed
-  /// as well as the id of the previous and new MC
-  void onMajorContributorChanged (SID sid, SID oldMC, SID newMC);
-};
-
-/// \endcond
-
-/// Contains data regarding a specific species
-struct SpeciesData {
-
-  /// Time at which this species was first observed
-  uint firstAppearance;
-
-  /// Time at which this species was last observed
-  uint lastAppearance;
-
-  /// Number of individuals of the species observed
-  uint count;
-
-  /// Serialize to json
-  friend void to_json (TreeTypes::json &j, const SpeciesData &d) {
-    j = {d.firstAppearance, d.lastAppearance, d.count};
-  }
-
-  /// Deserialize from json
-  friend void from_json (const TreeTypes::json &j, SpeciesData &d) {
-    uint i=0;
-    d.firstAppearance = j[i++];
-    d.lastAppearance = j[i++];
-    d.count = j[i++];
-  }
-};
-
-namespace _details {
-
-/// Distance & compatibilities cache
-struct DCCache {
-  /// Cache collection of distances
-  std::vector<float> distances;
-
-  /// Cache collection of compatibilities
-  std::vector<float> compatibilities;
-
-  /// Remove all contents
-  void clear (void) {
-    distances.clear(),  compatibilities.clear();
-  }
-
-  /// Prepare exactly \p n units of storage space
-  void reserve (uint n) {
-    distances.reserve(n), compatibilities.reserve(n);
-  }
-
-  /// Append values
-  void push_back (float d, float c) {
-    distances.push_back(d), compatibilities.push_back(c);
-  }
-
-  /// \returns the size of the cache
-  size_t size (void) const {
-    assert(distances.size() == compatibilities.size());
-    return distances.size();
-  }
-};
-
-
-/// Helper structure for ensuring that the pair values are ordered
-///
-/// \tparam T stored type
-template <typename T>
-struct ordered_pair {
-  T first;  ///< First value (lower or equal to second)
-  T second; ///< Second value (greater or equal to first)
-
-  /// Create an ordered pair from un-ordered pair of values
-  ordered_pair(T first, T second)
-    : first(std::min(first, second)), second(std::max(first, second)) {}
-
-  /// Compare two ordered_pairs in lexicographic order
-  friend bool operator< (const ordered_pair &lhs, const ordered_pair &rhs) {
-    if (lhs.first != rhs.first) return lhs.first < rhs.first;
-    return lhs.second < rhs.second;
-  }
-};
-
-/// Helper alias to a map whose keys are ordered so that
-/// \f$\forall i,j \in M i<j\f$
-using DistanceMap = std::map<ordered_pair<uint>, float>;
-
-/// Description of the contribution of a genome to a species enveloppe
-struct EnveloppeContribution {
-  bool better;  ///< Should an enveloppe point be replaced
-  uint than;    ///< Index of the enveloppe point to replace
-  float value;  ///< Confidence of the replacement pertinence
-};
-
-/// Helper alias to a genome identificator
-using GID = genotype::BOCData::GID;
-
-/// Computes whether or not the considered species would be better described by
-/// replacing a point from the current enveloppe (with distance map \p edist)
-/// by an incoming genome (with distances \p gdist)
-EnveloppeContribution computeContribution(const DistanceMap &edist,
-                                          const std::vector<float> &gdist,
-                                          GID gid, const std::vector<GID> &ids);
-
-} // end of namespace _details
-
 /// When kept informed about the birth/death and stepping events of a simulation
 /// this struct can generate a valid, complete, record of all species event
 /// with informations on both the hierarchical and invididual dynamics
@@ -176,17 +31,17 @@ EnveloppeContribution computeContribution(const DistanceMap &edist,
 template <typename GENOME>
 class PhylogenicTree {
 public:
-  /// \copydoc TreeTypes::json
-  using json = TreeTypes::json;
-
-  /// Helper alias for the genome identificator
-  using GID = genotype::BOCData::GID;
-
-  /// \copydoc TreeTypes::SID
-  using SID = TreeTypes::SID;
-
   /// Helper alias for the Parent enumeration
   using Parent = genotype::BOCData::Parent;
+
+  /// Helper alias to a species node
+  using Node = phylogeny::Node<GENOME>;
+
+  /// \copydoc Node::Ptr
+  using Node_ptr = typename Node::Ptr;
+
+  /// \copydoc Node::Collection
+  using Nodes = typename Node::Collection;
 
   /// Specialization used by this tree. Uses CRTP
   using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
@@ -196,6 +51,9 @@ public:
 
   /// Helper alias to the type used to cache distance/compatibilities values
   using DCCache = _details::DCCache;
+
+  /// \copydoc Contributors::Contribution
+  using SpeciesContribution = typename Contributors::Contribution;
 
   /// Create an empty PTree
   PhylogenicTree(void) {
@@ -249,7 +107,7 @@ public:
   void step (uint step, IT begin, IT end, F geneticID) {
 
     // Determine which species are still alive
-    TreeTypes::LivingSet aliveSpecies;
+    LivingSet aliveSpecies;
     for (IT it = begin; it != end; ++it)
       aliveSpecies.insert(_idToSpecies.at(geneticID(*it)));
 
@@ -269,10 +127,12 @@ public:
   /// \return The species \p g was added to
   SID addGenome (const GENOME &g) {
     // Ensure that the root exists
-    if (!_root) _root = makeNode(SpeciesContribution{});
+    if (!_root) {
+      _root = makeNode(SpeciesContribution{});
+      return updateSpeciesContents(g, _root, DCCache{});
+    }
 
     // Retrieve parent's species
-    /// \todo this should not fail on initialization data (SID == -1)
     SID mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
         fSID = _idToSpecies.parentSID(g, Parent::FATHER);
 
@@ -288,8 +148,7 @@ public:
       s1 = _nodes[fSID];
     }
 
-    auto species = addGenome(g, s0, s1, {mSID, fSID});
-    return species->id;
+    return addGenome(g, s0, s1, {mSID, fSID});
   }
 
   /// Remove \p g from this PTree (and update relevant internal data)
@@ -329,213 +188,6 @@ protected:
     _nextNodeID = SID(SID_t(_nextNodeID)+1);
     return curr;
   }
-
-  struct Node;
-
-  /// Smart pointer (shared) to a species node
-  using Node_ptr = std::shared_ptr<Node>;
-
-  /// Helper type to the cached linear node collection
-  using Nodes = TreeTypes::sidvector<Node_ptr>;
-
-  /// Contributor field for a species node
-  class NodeContributor {
-    SID _speciesID;  ///< Reference to the contributor
-    uint _count; ///< Number of contributions
-
-  public:
-    /// No-argument contructor
-    NodeContributor(void) : NodeContributor(nullptr, -1) {}
-
-    /// Constructor
-    NodeContributor(Node_ptr species, uint initialCount)
-      : _speciesID(species->id), _count(initialCount) {}
-
-    /// Accessor to the contributor reference
-    SID speciesID (void) const {
-      return _speciesID;
-    }
-
-    /// Increment the number of contributions
-    NodeContributor& operator+=(uint k) {
-      _count += k;
-      return *this;
-    }
-
-    /// Compare according to the respective number of contributions
-    friend bool operator< (const NodeContributor &lhs, const NodeContributor &rhs) {
-      // bigger contributions go first in the array
-      return !(lhs._count < rhs._count);
-    }
-
-
-    /// Serialize Contributor \p c into a json
-    friend void to_json (json &j, const NodeContributor &c) {
-      j = {c._speciesID, c._count};
-    }
-
-    /// Deserialize Contributor \p c from json \p j
-    friend void from_json (const json &j, NodeContributor &c) {
-      uint i=0;
-      c._speciesID = j[i++];
-      c._count = j[i++];
-    }
-  };
-
-  /// Sorted collection of contributors for a species node
-  class Contributors {
-    /// The buffer containing the individual contributions
-    std::vector<NodeContributor> vec;
-
-    /// The associated node identificator
-    SID nodeID;
-
-    /// The main contributor (cached value)
-    Node *main;
-
-  public:
-    /// Alias for the data structure containing the contributing SIDs
-    using Contribution = std::multiset<SID>;
-
-    /// No-argument constructor. Leaves the class in an invalid state
-    Contributors (void) : Contributors(SID::INVALID) {}
-
-    /// Constructor. Registers the node whose contributor collection it manages
-    Contributors (SID id) : nodeID(id), main(nullptr) {}
-
-    /// \return The id of the monitored node
-    SID getNodeID (void) const {
-      return nodeID;
-    }
-
-    /// \return The main contributor, i.e. with highest number of contributions
-    Node* getMain (void) const {
-      assert(nodeID != SID::INVALID);
-      return main;
-    }
-
-    /// Register new contributions, updates internal data and returns the new
-    /// main contributor
-    Node* update (Contribution sids, const Nodes &nodes) {
-      assert(nodeID != SID::INVALID);
-
-      uint i=0;
-      uint processed = 0;
-
-      // Ignore invalid(s)
-      sids.erase(SID::INVALID);
-
-      // Update already known contributors
-      while(i < vec.size() && processed < sids.size()) {
-        SID sid = vec[i].speciesID();
-        uint k = sids.count(sid);
-
-        if (k > 0) {
-          vec[i] += k;
-          processed += k;
-          sids.erase(sid);
-        }
-
-        i++;
-      }
-
-      // Register new contributors
-      i = 0;
-      while (!sids.empty()) {
-        auto it = sids.begin();
-        SID sid = *it;
-        uint k = 1;
-        while (*(++it) == sid)  k++;
-        sids.erase(sid);
-
-        vec.emplace_back(nodes[sid], k);
-      }
-
-      // sort by decreasing contribution
-      std::stable_sort(vec.begin(), vec.end());
-
-      return updateMain(nodes);
-    }
-
-
-    /// Update the main contributor cached variable
-    Node* updateMain (const Nodes &nodes) {
-      assert(nodeID != SID::INVALID);
-
-      uint i=0;
-      SID sid = SID::INVALID;
-      while(sid != nodeID && i<vec.size())
-        sid = vec[i++].speciesID();
-      main = (sid == SID::INVALID ? nullptr : nodes[sid].get());
-      return main;
-    }
-
-
-    /// Serialize Contributors \p c into a json
-    friend void to_json (json &j, const Contributors &c) {
-      j = {c.nodeID, c.vec};
-    }
-
-    /// Deserialize Contributors \p c from json \p j
-    friend void from_json (const json &j, Contributors &c) {
-      uint i=0;
-      c.nodeID = j[i++];
-      c.vec = j[i++].get<decltype(Contributors::vec)>();
-    }
-  };
-
-  /// \copydoc Contributors::Contribution
-  using SpeciesContribution = typename Contributors::Contribution;
-
-  /// Species node
-  struct Node {
-    SID id; ///< Species identificator
-    SpeciesData data; ///< Species additionnal data
-
-    /// Collection of contributors the this species' gene pool
-    Contributors contributors;
-
-    /// Subspecies of this node
-    std::vector<Node_ptr> children;
-
-    /// Collection of borderoids (in opposition to centroids)
-    std::vector<GENOME> enveloppe;
-
-    /// Cache map for the intra-enveloppe distances
-    _details::DistanceMap distances;
-
-    /// Create a node with \p id and \p parent
-    Node (SID id) : id(id), contributors(id) {}
-
-    /// \returns the main contributor for this species (excluding itself)
-    Node* parent (void) {
-      return contributors.getMain();
-    }
-
-    /// Stream this node. Mostly for debugging purpose.
-    friend std::ostream& operator<< (std::ostream &os, const Node &n) {
-      std::string spacing = "> ";
-      const Node *p = &n;
-      while ((p = p->parent))  spacing += "  ";
-
-      os << spacing << "[" << n.id << "] ( ";
-      for (const GENOME &g: n.enveloppe)    os << g.id() << " ";
-      os << ")\n";
-
-      for (const Node_ptr &ss: n.children)  os << *ss.get();
-
-      return os;
-    }
-
-    /// Dump this node, in dot format.
-    void logTo (std::ostream &os) const {
-      os << "\t" << id << ";\n";
-      for (const Node_ptr &n: children) {
-        os << "\t" << id << " -> " << n->id << ";\n";
-        n->logTo(os);
-      }
-    }
-  };
 
   /// Allows mapping a genome ID to its species ID
   struct IdToSpeciesMap {
@@ -627,21 +279,20 @@ protected:
   Node_ptr makeNode (Contributors &&initialContrib,
                      bool withCallbacks = true) {
 
-    Node_ptr p = std::make_shared<Node>(initialContrib.getNodeID());
+    Node_ptr p = Node::make_shared(initialContrib, _nodes);
     p->data.firstAppearance = _step;
     p->data.lastAppearance = _step;
     p->data.count = 1;
-    p->contributors = initialContrib;
 
     assert(p->contributors.getNodeID()
            == SID(std::underlying_type<SID>::type(_nextNodeID)-1));
 
     _nodes.push_back(p);
 
-    Node *parent = p->parent();
+    Node *parent = p->parent;
     if (parent) parent->children.push_back(p);
     if (_callbacks && withCallbacks)
-      _callbacks->onNewSpecies(parent ? parent->id : SID::INVALID, p->id);
+      _callbacks->onNewSpecies(parent ? parent->id() : SID::INVALID, p->id());
 
     return p;
   }
@@ -652,7 +303,7 @@ protected:
   Node_ptr makeNode (const SpeciesContribution &contrib) {
     SID id = nextNodeID();
     Contributors c (id);
-    c.update(contrib, _nodes);
+    c.update(contrib);
     return makeNode(std::move(c));
   }
 
@@ -661,18 +312,39 @@ protected:
     return const_cast<Node_ptr&>(std::as_const(*this).nodeAt(i));
   }
 
+  /// \return Whether \p g is similar enough to \p species
+  float speciesMatchingScore (const GENOME &g, Node_ptr species,
+                              DCCache &dccache) {
+    uint k = species->enveloppe.size();
+
+    dccache.clear();
+    dccache.reserve(k);
+
+    uint matable = 0;
+    for (const GENOME &e: species->enveloppe) {
+      double d = distance(g, e);
+      double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
+
+      if (c >= Config::compatibilityThreshold()) matable++;
+      dccache.push_back(d, c);
+    }
+
+    assert(dccache.size() == k);
+    return matable - Config::similarityThreshold() * k;
+  }
+
   /// Find the appropriate place for \p g in the subtree(s) rooted at
   ///  \p species0 (and species1)
-  Node_ptr addGenome (const GENOME &g, Node_ptr species0, Node_ptr species1,
-                      const SpeciesContribution &contrib) {
+  SID addGenome (const GENOME &g, Node_ptr species0, Node_ptr species1,
+                 const SpeciesContribution &contrib) {
 
     if (Config::DEBUG()) {
       std::cerr << "Attempting to add genome " << g.id()
                 << " to species ";
       if (!species1)
-        std::cerr << species0->id;
+        std::cerr << species0->id();
       else
-        std::cerr << "either " << species0->id << " or " << species1->id;
+        std::cerr << "either " << species0->id() << " or " << species1->id();
       std::cerr << std::endl;
     }
 
@@ -700,9 +372,9 @@ protected:
 
     if (Config::DEBUG()) {
       std::cerr << "\tIncompatible with ";
-      if (!species1)  std::cerr << species0->id;
-      else  std::cerr << "both " << species0->id << " and " << species1->id;
-      std::cerr << std::endl;
+      if (!species1)  std::cerr << species0->id();
+      else  std::cerr << "both " << species0->id() << " and " << species1->id();
+      std::cerr << " (score=" << bestScore << ")" << std::endl;
     }
 
     // Find best derived species
@@ -727,44 +399,26 @@ protected:
     }
 
     // Belongs to subspecies ?
-    if (bestScore > 0)
+    if (bestScore > 0) {
+      if (Config::DEBUG())
+        std::cerr << "Compatible with " << bestSpecies->id()
+                  << " (score=" << bestScore << ")" << std::endl;
       return updateSpeciesContents(g, bestSpecies, bestSpeciesDCCache, contrib);
+    }
 
     // Need to create new species
     if (Config::simpleNewSpecies()) {
       Node_ptr subspecies = makeNode(contrib);
       dccache.clear();
-
-      insertInto(_step, g, subspecies, dccache, _callbacks);
-      _idToSpecies.insert(g.id(), subspecies->id);
-      return subspecies;
+      if (Config::DEBUG())
+        std::cerr << "Created new species " << subspecies->id() << std::endl;
+      return updateSpeciesContents(g, subspecies, dccache);
 
     } else
       assert(false);
 
     assert(false);
-    return nullptr;
-  }
-
-  /// \return Whether \p g is similar enough to \p species
-  friend float speciesMatchingScore (const GENOME &g, Node_ptr species,
-                                     DCCache &dccache) {
-    uint k = species->enveloppe.size();
-
-    dccache.clear();
-    dccache.reserve(k);
-
-    uint matable = 0;
-    for (const GENOME &e: species->enveloppe) {
-      double d = distance(g, e);
-      double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
-
-      if (c >= Config::compatibilityThreshold()) matable++;
-      dccache.push_back(d, c);
-    }
-
-    assert(dccache.size() == k);
-    return matable - Config::similarityThreshold() * k;
+    return SID::INVALID;
   }
 
   /// Insert \p g into node \p species, possibly changing the enveloppe.
@@ -777,9 +431,6 @@ protected:
 
     const uint k = species->enveloppe.size();
 
-    if (Config::DEBUG())
-      std::cerr << "\tCompatible with " << species->id << std::endl;
-
     auto &dist = species->distances;
 
     // Populate the enveloppe
@@ -787,7 +438,7 @@ protected:
       if (Config::DEBUG())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(g);
-      if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id, g.id());
+      if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(), g.id());
       for (uint i=0; i<k; i++)
         dist[{i, k}] = dccache.distances[i];
 
@@ -814,8 +465,8 @@ protected:
                     << ", c = " << ec.value << ")" << std::endl;
 
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(species->id, species->enveloppe[ec.than].id());
-          callbacks->onGenomeEntersEnveloppe(species->id, g.id());
+          callbacks->onGenomeLeavesEnveloppe(species->id(), species->enveloppe[ec.than].id());
+          callbacks->onGenomeEntersEnveloppe(species->id(), g.id());
         }
         species->enveloppe[ec.than] = g;
         for (uint i=0; i<k; i++)
@@ -830,31 +481,36 @@ protected:
 
   /// Update species \p s by inserting genome \p g, updating the contributions
   /// and registering the GID>SID association
-  Node_ptr updateSpeciesContents(const GENOME &g, Node_ptr s,
-                                 DCCache &cache,
-                                 const SpeciesContribution &ctb) {
+  SID updateSpeciesContents(const GENOME &g, Node_ptr s,
+                            const DCCache &cache,
+                            const SpeciesContribution &ctb = {}) {
 
     insertInto(_step, g, s, cache, _callbacks);
-    updateContributions(s, ctb);
-    _idToSpecies.insert(g.id(), s->id);
-    return s;
+    if (!ctb.empty()) updateContributions(s, ctb);
+    _idToSpecies.insert(g.id(), s->id());
+    return s->id();
   }
 
   /// Update species \p s contributions with the provided values
   void updateContributions (Node_ptr s, const SpeciesContribution &contrib) {
-    Node *oldMC = s->parent(),
-         *newMC = s->contributors.update(contrib, _nodes);
+    Node *oldMC = s->parent,
+         *newMC = s->update(contrib, _nodes);
 
     if (oldMC != newMC) {
+      /// \todo remove
+      if (!oldMC || !newMC)
+        s->update({}, _nodes);
+
+      assert(oldMC);
+      assert(newMC);
+
       // Parent changed. Update and notify
-      if (oldMC) {
-        auto &v = oldMC->children;
-        v.erase(std::remove(v.begin(), v.end(), s), v.end());
-      }
+      auto &v = oldMC->children;
+      v.erase(std::remove(v.begin(), v.end(), s), v.end());
 
       newMC->children.push_back(s);
 
-      _callbacks->onMajorContributorChanged(s->id, oldMC->id, newMC->id);
+      _callbacks->onMajorContributorChanged(s->id(), oldMC->id(), newMC->id());
     }
   }
 
@@ -866,11 +522,8 @@ private:
   /// json \p j
   Node_ptr rebuildHierarchy(const json &j) {
     Contributors c = j["contribs"];
-    c.updateMain(_nodes);
-
     Node_ptr n = makeNode(std::move(c), false);
 
-    n->id = j["id"];
     n->data = j["data"];
     n->enveloppe = j["envlp"].get<decltype(Node::enveloppe)>();
     const json jd = j["dists"];
@@ -899,7 +552,7 @@ public:
     json jc;
     for (const auto &c: n.children) jc.push_back(*c);
 
-    j["id"] = n.id;
+    j["id"] = n.id();
     j["data"] = n.data;
     j["envlp"] = n.enveloppe;
     j["contribs"] = n.contributors;

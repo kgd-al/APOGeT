@@ -1,4 +1,5 @@
-#include "phylogenictree.hpp"
+#include "../ptreeconfig.h"
+#include "treetypes.h"
 
 namespace phylogeny {
 namespace _details {

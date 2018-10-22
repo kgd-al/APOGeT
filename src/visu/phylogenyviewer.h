@@ -5,6 +5,8 @@
 #include <QGraphicsView>
 #include <QBoxLayout>
 
+#include "../core/tree/treetypes.h"
+
 #include "ptgraphbuilder.h"
 
 /*!
@@ -20,15 +22,14 @@ namespace gui {
 class PhylogenyViewer_base : public QDialog {
   Q_OBJECT
 protected:
-
   /// \copydoc genotype::BOCData::GID
   using GID = genotype::BOCData::GID;
 
-  /// \copydoc phylogeny::TreeTypes::SID
-  using SID = phylogeny::TreeTypes::SID;
+  /// Helper alias to the species identificator used in the phylogenic tree
+  using SID = phylogeny::SID;
 
-  /// \copydoc phylogeny::TreeTypes::LivingSet
-  using LivingSet = phylogeny::TreeTypes::LivingSet;
+  /// Helper alias to the phylogenic tree's collection of living individuals
+  using LivingSet = phylogeny::LivingSet;
 
   /// Configuration data controlling what to draw and how
   using Config = gui::ViewerConfig;
@@ -254,13 +255,13 @@ struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
   using PV = gui::PhylogenyViewer<GENOME>;
 
   /// Helper alias to a genomic identificator
-  using GID = typename PT::GID;
+  using GID = phylogeny::GID;
 
   /// Helper alias to a species identificator
-  using SID = typename PT::SID;
+  using SID = phylogeny::SID;
 
   /// Helper alias to a collection of still-alive species
-  using LivingSet = phylogeny::TreeTypes::LivingSet;
+  using LivingSet = phylogeny::LivingSet;
 
   /// Creates a callback object associated with a specific viewer
   Callbacks_t (PV *v) : viewer(v) {}
