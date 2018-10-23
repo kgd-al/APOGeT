@@ -6,6 +6,10 @@ namespace _details {
 
 using Config = config::PTree;
 
+auto debug = [] {
+  return Config::DEBUG_LEVEL() * Config::DEBUG_ENVELOPPE();
+};
+
 /// \returns a vector of indices into \p values allowing sorted access
 template <typename T>
 static std::vector<size_t> ordered(std::vector<T> const& values) {
@@ -47,7 +51,7 @@ EnveloppeContribution maxAverage (const DistanceMap &edist,
 
   // Compute variance contributions and least contributor
   for (uint i=0; i<k; i++) {
-    if (Config::DEBUG() >= 2)
+    if (debug() >= 2)
       std::cerr << "\n\t\tc(" << pad() << ids[i]
                 << "/" << pad() << gid << ") =";
 
@@ -56,7 +60,7 @@ EnveloppeContribution maxAverage (const DistanceMap &edist,
       if (i==j) continue;
       c += - edist.at({i,j}) + gdist.at(j);
 
-      if (Config::DEBUG() >= 2) {
+      if (debug() >= 2) {
         std::cerr << std::left;
         if (j>0)  std::cerr << "\t\t  " << pad() << " "
                             << " " << pad() << " " << "   ";
@@ -66,7 +70,7 @@ EnveloppeContribution maxAverage (const DistanceMap &edist,
       }
     }
 
-    if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
+    if (debug() >= 2) std::cerr << " = " << c << std::endl;
     if (ec.value < c) {
       ec.value = c;
       ec.than = i;
@@ -95,7 +99,7 @@ EnveloppeContribution maxMinDist (const DistanceMap &edist,
 
   // Compare with each vertex
   for (uint i=0; i<k; i++) {
-    if (Config::DEBUG() >= 2)
+    if (debug() >= 2)
       std::cerr << "\t\tc(" << pad() << ids[i]
                 << "/" << pad() << gid << ") =" << std::left;
 
@@ -110,7 +114,7 @@ EnveloppeContribution maxMinDist (const DistanceMap &edist,
 
     double c = - minBase + minNew;
 
-    if (Config::DEBUG() >= 2)
+    if (debug() >= 2)
       std::cerr << " - " << std::setw(8) << minBase
                 << " + " << std::setw(8) << minNew
                 << " = " << std::setw(8) << c
@@ -148,7 +152,7 @@ EnveloppeContribution maxAvgMinStdDev (const DistanceMap &edist,
 
   // Compare with each vertex
   for (uint i=0; i<k; i++) {
-    if (Config::DEBUG() >= 2)
+    if (debug() >= 2)
       std::cerr << "\t\tc(" << pad() << ids[i]
                 << "/" << pad() << gid << ") =" << std::left;
 
@@ -163,7 +167,7 @@ EnveloppeContribution maxAvgMinStdDev (const DistanceMap &edist,
     double c = - baseAVG + newAVG
                + baseStdDev - newStdDev;
 
-    if (Config::DEBUG() >= 2)
+    if (debug() >= 2)
       std::cerr << " - " << std::setw(8) << baseAVG
                 << " + " << std::setw(8) << newAVG
                 << " + " << std::setw(8) << baseStdDev
@@ -171,7 +175,7 @@ EnveloppeContribution maxAvgMinStdDev (const DistanceMap &edist,
                 << " = " << std::setw(8) << c
                 << std::endl;
 
-//      if (Config::DEBUG() >= 2) {
+//      if (debug() >= 2) {
 //        std::cerr << std::left;
 //        if (j>0)  std::cerr << "\t\t  " << pad() << " "
 //                            << " " << pad() << " " << "   ";
@@ -183,7 +187,7 @@ EnveloppeContribution maxAvgMinStdDev (const DistanceMap &edist,
 //        if (j<k-2)  std::cerr << "\n";
 //      }
 //    }
-//    if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
+//    if (debug() >= 2) std::cerr << " = " << c << std::endl;
 
     if (ec.value < c) {
       ec.value = c;
@@ -223,7 +227,7 @@ EnveloppeContribution maxWeightedDist2Avg (const DistanceMap &edist,
   // Compute variance contributions and least contributor
   for (uint i=0; i<k; i++) {
     std::vector<double> d_i (k), d_g(k);
-    if (Config::DEBUG() >= 2)
+    if (debug() >= 2)
       std::cerr << "\n\t\tc(" << pad() << ids[i]
                 << "/" << pad() << gid << ") =";
 
@@ -241,7 +245,7 @@ EnveloppeContribution maxWeightedDist2Avg (const DistanceMap &edist,
       double w = weight(pc);
       c += w * (nc + pc);
 
-      if (Config::DEBUG() >= 2) {
+      if (debug() >= 2) {
         std::cerr << std::left;
         if (j>0)  std::cerr << "\t\t  " << pad() << " "
                             << " " << pad() << " " << "   ";
@@ -254,7 +258,7 @@ EnveloppeContribution maxWeightedDist2Avg (const DistanceMap &edist,
       }
     }
 
-    if (Config::DEBUG() >= 2) std::cerr << " = " << c << std::endl;
+    if (debug() >= 2) std::cerr << " = " << c << std::endl;
     if (ec.value < c) {
       ec.value = c;
       ec.than = i;

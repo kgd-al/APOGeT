@@ -7,6 +7,8 @@
  * Contains the definition for the species data storage structure
  */
 
+#include "treetypes.h"
+
 namespace phylogeny {
 
 /// Contains various data about a specific species

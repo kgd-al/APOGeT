@@ -3,26 +3,43 @@
 
 namespace phylogeny {
 
-using Config = config::PTree;
+auto debug = [] {
+  return config::PTree::DEBUG_LEVEL() * config::PTree::DEBUG_CONTRIBUTORS();
+};
 
-SID Contributors::update (Contribution sids) {
+bool operator== (const NodeContributor &lhs, const NodeContributor &rhs) {
+  return lhs.speciesID() == rhs.speciesID()
+      && lhs.count() == rhs.count();
+}
+
+SID Contributors::update (Contribution sids,
+                          const ValidityEvaluator &elligible) {
+
   assert(nodeID != SID::INVALID);
 
   uint i=0;
-  uint processed = 0;
+  uint unprocessed = sids.size();
+
+  if (debug() >= 1)
+    std::cerr << "Updating contributions for " << nodeID << std::endl;
 
   // Ignore invalid(s)
   sids.erase(SID::INVALID);
 
   // Update already known contributors
-  while(i < vec.size() && processed < sids.size()) {
-    SID sid = vec[i].speciesID();
+  while(i < vec.size() && unprocessed > 0) {
+    auto &c = vec[i];
+    SID sid = c.speciesID();
     uint k = sids.count(sid);
 
     if (k > 0) {
-      vec[i] += k;
-      processed += k;
+      c += k;
+      unprocessed -= k;
       sids.erase(sid);
+
+      if (debug() >= 2)
+        std::cerr << "\tAdded " << k << " at pos "
+                  << i << " (SID=" << sid << ")" << std::endl;
     }
 
     i++;
@@ -36,7 +53,13 @@ SID Contributors::update (Contribution sids) {
     uint k = std::distance(range.first, range.second);
     sids.erase(sid);
 
-    vec.emplace_back(sid, k);
+    bool e = elligible(nodeID, sid);
+    vec.emplace_back(sid, k, e);
+
+    if (debug() >= 2)
+      std::cerr << "\tAppend " << k
+                << " (SID=" << sid << ", elligible ? " << std::boolalpha << e
+                << ")" << std::endl;
   }
 
   // sort by decreasing contribution
@@ -52,17 +75,15 @@ SID Contributors::currentMain (void) {
     return SID::INVALID;
 
   uint i = 1;
-  SID sid = vec[0].speciesID();
-  while (sid == nodeID && i < vec.size())
-    sid = vec[i++].speciesID();
+  auto mc = vec[0];
+  while (!mc.elligible() && i < vec.size())
+    mc = vec[i++];
 
-  if (Config::DEBUG() >= 2)
+  if (debug() >= 1)
     std::cerr << "Main contributor for " << nodeID << " is "
-              << sid << " based on " << vec << std::endl;
+              << mc.speciesID() << " based on " << *this << std::endl;
 
-  if (sid == nodeID)
-        return SID::INVALID;
-  else  return sid;
+  return mc.elligible() ? mc.speciesID() : SID::INVALID;
 }
 
 /// Serialize Contributors \p c into a json
@@ -75,6 +96,13 @@ void from_json (const json &j, Contributors &c) {
   uint i=0;
   c.nodeID = j[i++];
   c.vec = j[i++].get<decltype(Contributors::vec)>();
+}
+
+std::ostream& operator<< (std::ostream &os, const Contributors &c) {
+  os << "[ ";
+  for (const NodeContributor &nc: c.vec)
+    os << "{" << nc.speciesID() << "," << nc.count() << "} ";
+  return os << "]";
 }
 
 } // end of namespace phylogeny

@@ -91,7 +91,7 @@ public:
       path(nullptr), timeline(nullptr), hoverCallback(hoverCallback) {
 
     enveloppe = n.enveloppe.size();
-    children = n.children.size();
+    children = n.children().size();
 
     _alive = false;
     setOnSurvivorPath(false);
@@ -322,7 +322,7 @@ struct PTGraphBuilder {
     cache.items.scene->addItem(gn);
 
     // Process subspecies
-    for (const auto &n_: n.children)
+    for (const auto &n_: n.children())
       addSpecies(gn, *n_, cache);
 
     // Generate path to parent if needed

@@ -14,20 +14,34 @@ namespace phylogeny {
 /// Contributor field for a species node
 class NodeContributor {
   SID _speciesID;  ///< Reference to the contributor
-  uint _count; ///< Number of contributions
+  uint _count;  ///< Number of contributions
+  bool _elligible;  ///< Valid candidate for being the major contributor ?
 
 public:
   /// No-argument contructor
-  NodeContributor(void) : NodeContributor(SID::INVALID, -1) {}
+  NodeContributor(void) : NodeContributor(SID::INVALID, -1, false) {}
 
   /// Constructor
-  NodeContributor(SID sid, uint initialCount)
-    : _speciesID(sid), _count(initialCount) {}
+  NodeContributor(SID sid, uint initialCount, bool elligible)
+    : _speciesID(sid), _count(initialCount), _elligible(elligible) {}
 
   /// Accessor to the contributor reference
   SID speciesID (void) const {
     return _speciesID;
   }
+
+  /// Accessor to the contribution count
+  uint count (void) const {
+    return _count;
+  }
+
+  /// \returns the validity of this contributor
+  /// \see _elligible
+  bool elligible (void) const { return _elligible;  }
+
+  /// Updates the validity of this contributor
+  /// \see _elligible
+  void setElligible (void) {  _elligible = true;  }
 
   /// Increment the number of contributions
   NodeContributor& operator+=(uint k) {
@@ -54,7 +68,10 @@ public:
   }
 };
 
-/// Sorted collection of contributors for a species node
+/// Sorted collection of contributors for a species node.
+///
+/// Use both for maintaining phylogenic data and determining the major
+/// contributor
 class Contributors {
   /// The buffer containing the individual contributions
   std::vector<NodeContributor> vec;
@@ -65,6 +82,10 @@ class Contributors {
 public:
   /// Alias for the data structure containing the contributing SIDs
   using Contribution = std::multiset<SID>;
+
+  /// Alias for the function type used to check is a species is elligible as a
+  /// major contributor
+  using ValidityEvaluator = std::function<bool(SID,SID)>;
 
   /// No-argument constructor. Leaves the class in an invalid state
   Contributors (void) : Contributors(SID::INVALID) {}
@@ -79,20 +100,38 @@ public:
 
   /// Register new contributions, updates internal data and returns the new
   /// main contributor
-  SID update (Contribution sids);
+  SID update (Contribution sids, const ValidityEvaluator &elligible);
 
-  /// Update the main contributor cached variable so that if nodeID = X
+  /// Update the main contributor cached variable so that:
+  /// if S = subtree(nodeID), X in S and Y not in S
   /// [] -> INVALID
   /// [X] -> INVALID
   /// [X,Y,...] -> Y
   /// [Y,...,X,...] -> Y
   SID currentMain (void);
 
+  /// \todo DON'T FORGET
+  void updateValidites (void);
+
   /// Serialize Contributors \p c into a json
   friend void to_json (json &j, const Contributors &c);
 
   /// Deserialize Contributors \p c from json \p j
   friend void from_json (const json &j, Contributors &c);
+
+  /// Stream Contributors \p c to \p os
+  friend std::ostream& operator<< (std::ostream &os, const Contributors &c);
+
+  /// \returns Whether or not \p rhs is a valid candidate for being the major
+  /// contributor of species \p lhs
+  template <typename T>
+  static bool elligibile (SID lhs, SID rhs, const T &nodes) {
+    auto n = nodes.at(lhs).get(),
+         p = nodes.at(rhs).get();
+    while (p && p != n)
+      p = p->parent();
+    return p != n;
+  }
 };
 
 } // end of namespace phylogeny

@@ -34,8 +34,17 @@ struct CFILE : public ConfigFile<CFILE> {
   /// (Debug) selector for the enveloppe criteria
   DECLARE_DEBUG_PARAMETER(int, ENV_CRIT, 0)
 
-  /// Debug constant (compile-constant equal to false in all but debug builds)
-  DECLARE_DEBUG_PARAMETER(int, DEBUG, 0)
+  /// How much debug information should be printed out
+  DECLARE_DEBUG_PARAMETER(uint, DEBUG_LEVEL, 0)
+
+  /// Should debug info about the ptree be printed out ?
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_PTREE, 1)
+
+  /// Should debug info about the enveloppes be printed out ?
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_ENVELOPPE, 0)
+
+  /// Should debug info about the contributors be printed out ?
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_CONTRIBUTORS, 1)
 };
 #undef CFILE
 

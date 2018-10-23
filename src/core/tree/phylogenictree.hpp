@@ -30,6 +30,11 @@ namespace phylogeny {
 /// \tparam GENOME the genome of the observed individuals.
 template <typename GENOME>
 class PhylogenicTree {
+  /// Helper lambda for debug printing
+  static constexpr auto debug = [] {
+    return config::PTree::DEBUG_LEVEL() * config::PTree::DEBUG_PTREE();
+  };
+
 public:
   /// Helper alias for the Parent enumeration
   using Parent = genotype::BOCData::Parent;
@@ -119,7 +124,7 @@ public:
     // Potentially notify outside world
     if (_callbacks) _callbacks->onStepped(step, aliveSpecies);
 
-    if (Config::DEBUG())
+    if (debug())
       std::cerr << _idToSpecies.size() << " id>species pairs stored" << std::endl;
   }
 
@@ -148,13 +153,16 @@ public:
       s1 = _nodes[fSID];
     }
 
-    return addGenome(g, s0, s1, {mSID, fSID});
+    SID sid = addGenome(g, s0, s1, {mSID, fSID});
+
+    if (Config::DEBUG_LEVEL())  std::cerr << std::endl;
+    return sid;
   }
 
   /// Remove \p g from this PTree (and update relevant internal data)
   SID delGenome (const GENOME &g) {
     auto sid = _idToSpecies.remove(g);
-    if (Config::DEBUG())
+    if (debug())
       std::cerr << "New last appearance of species " << sid << " is " << _step << std::endl;
 
     nodeAt(sid)->data.lastAppearance = _step;
@@ -289,8 +297,8 @@ protected:
 
     _nodes.push_back(p);
 
-    Node *parent = p->parent;
-    if (parent) parent->children.push_back(p);
+    Node *parent = p->parent();
+    if (parent) parent->addChild(p);
     if (_callbacks && withCallbacks)
       _callbacks->onNewSpecies(parent ? parent->id() : SID::INVALID, p->id());
 
@@ -303,7 +311,7 @@ protected:
   Node_ptr makeNode (const SpeciesContribution &contrib) {
     SID id = nextNodeID();
     Contributors c (id);
-    c.update(contrib);
+    c.update(contrib, Node::elligibilityTester(_nodes));
     return makeNode(std::move(c));
   }
 
@@ -338,7 +346,7 @@ protected:
   SID addGenome (const GENOME &g, Node_ptr species0, Node_ptr species1,
                  const SpeciesContribution &contrib) {
 
-    if (Config::DEBUG()) {
+    if (debug()) {
       std::cerr << "Attempting to add genome " << g.id()
                 << " to species ";
       if (!species1)
@@ -370,7 +378,7 @@ protected:
     if (bestScore > 0)
       return updateSpeciesContents(g, bestSpecies, bestSpeciesDCCache, contrib);
 
-    if (Config::DEBUG()) {
+    if (debug()) {
       std::cerr << "\tIncompatible with ";
       if (!species1)  std::cerr << species0->id();
       else  std::cerr << "both " << species0->id() << " and " << species1->id();
@@ -379,10 +387,10 @@ protected:
 
     // Find best derived species
     uint i=0, k = 0;
-    size_t max = species0->children.size();
-    if (species1) max = std::max(max, species1->children.size());
+    size_t max = species0->children().size();
+    if (species1) max = std::max(max, species1->children().size());
     while (bestScore <= 0 && i < max) {
-      Node_ptr &subspecies = species[k]->children[i];
+      Node_ptr &subspecies = species[k]->child(i);
       float score = speciesMatchingScore(g, subspecies, dccache);
       if (bestScore < score) {
         bestSpecies = subspecies;
@@ -390,7 +398,7 @@ protected:
         bestSpeciesDCCache = dccache;
       }
 
-      if (!species1 || species[1-k]->children.size() <= i)
+      if (!species1 || species[1-k]->children().size() <= i)
         i++;
       else {
         if (k==1) i++;
@@ -400,7 +408,7 @@ protected:
 
     // Belongs to subspecies ?
     if (bestScore > 0) {
-      if (Config::DEBUG())
+      if (debug())
         std::cerr << "Compatible with " << bestSpecies->id()
                   << " (score=" << bestScore << ")" << std::endl;
       return updateSpeciesContents(g, bestSpecies, bestSpeciesDCCache, contrib);
@@ -410,7 +418,7 @@ protected:
     if (Config::simpleNewSpecies()) {
       Node_ptr subspecies = makeNode(contrib);
       dccache.clear();
-      if (Config::DEBUG())
+      if (debug())
         std::cerr << "Created new species " << subspecies->id() << std::endl;
       return updateSpeciesContents(g, subspecies, dccache);
 
@@ -435,12 +443,12 @@ protected:
 
     // Populate the enveloppe
     if (k < Config::enveloppeSize()) {
-      if (Config::DEBUG())  std::cerr << "\tAppend to the enveloppe" << std::endl;
+      if (debug())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(g);
       if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(), g.id());
       for (uint i=0; i<k; i++)
-        dist[{i, k}] = dccache.distances[i];
+        dist.at({i, k}) = dccache.distances[i];
 
     // Better enveloppe point ?
     } else {
@@ -452,13 +460,13 @@ protected:
 
       // Genome inside the enveloppe. Nothing to do
       if (!ec.better) {
-        if (Config::DEBUG())
+        if (debug())
           std::cerr << "\t" << g.id() << "'s contribution is too low ("
                     << ec.value << ")" << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
-        if (Config::DEBUG())
+        if (debug())
           std::cerr << "\t" << g.id() << "'s contribution is better "
                     << "than enveloppe point " << ec.than << " (id: "
                     << species->enveloppe[ec.than].id()
@@ -471,7 +479,7 @@ protected:
         species->enveloppe[ec.than] = g;
         for (uint i=0; i<k; i++)
           if (i != ec.than)
-            dist[{i,ec.than}] = dccache.distances[i];
+            dist.at({i,ec.than}) = dccache.distances[i];
       }
     }
 
@@ -493,7 +501,7 @@ protected:
 
   /// Update species \p s contributions with the provided values
   void updateContributions (Node_ptr s, const SpeciesContribution &contrib) {
-    Node *oldMC = s->parent,
+    Node *oldMC = s->parent(),
          *newMC = s->update(contrib, _nodes);
 
     if (oldMC != newMC) {
@@ -505,10 +513,9 @@ protected:
       assert(newMC);
 
       // Parent changed. Update and notify
-      auto &v = oldMC->children;
-      v.erase(std::remove(v.begin(), v.end(), s), v.end());
-
-      newMC->children.push_back(s);
+      oldMC->delChild(s);
+      newMC->addChild(s);
+      _root->updateElligibilities(_nodes);
 
       _callbacks->onMajorContributorChanged(s->id(), oldMC->id(), newMC->id());
     }
@@ -530,7 +537,7 @@ private:
     const json jc = j["children"];
 
     for (const auto &d: jd)
-      n->distances[{d[0], d[1]}] = d[2];
+      n->distances.at({d[0], d[1]}) = d[2];
 
     for (const auto &c: jc)
       rebuildHierarchy(c);
@@ -550,7 +557,7 @@ public:
     for (const auto &d: n.distances) jd.push_back({d.first.first, d.first.second, d.second});
 
     json jc;
-    for (const auto &c: n.children) jc.push_back(*c);
+    for (const auto &c: n.children()) jc.push_back(*c);
 
     j["id"] = n.id();
     j["data"] = n.data;
