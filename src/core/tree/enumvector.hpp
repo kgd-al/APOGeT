@@ -72,6 +72,26 @@ public:
   auto resize (typename V::size_type n) {
     vec.resize(n);
   }
+
+  /// \overload
+  auto begin (void) {
+    return vec.begin();
+  }
+
+  /// \overload
+  auto rbegin (void) {
+    return vec.rbegin();
+  }
+
+  /// \overload
+  auto end (void) {
+    return vec.end();
+  }
+
+  /// \overload
+  auto rend (void) {
+    return vec.rend();
+  }
 };
 
 } // end namespace phylogeny

@@ -284,10 +284,12 @@ protected:
   /// as described in \p initialContrib
   /// Callbacks:
   ///   - Callbacks_t::onNewSpecies
-  Node_ptr makeNode (Contributors &&initialContrib,
-                     bool withCallbacks = true) {
+  Node_ptr makeNode (const SpeciesContribution &contrib) {
 
-    Node_ptr p = Node::make_shared(initialContrib, _nodes);
+    SID id = nextNodeID();
+    Contributors c (id);
+
+    Node_ptr p = Node::make_shared(c);
     p->data.firstAppearance = _step;
     p->data.lastAppearance = _step;
     p->data.count = 1;
@@ -297,22 +299,15 @@ protected:
 
     _nodes.push_back(p);
 
+    // Compute parent
+    p->update(contrib, _nodes);
+
     Node *parent = p->parent();
     if (parent) parent->addChild(p);
-    if (_callbacks && withCallbacks)
+    if (_callbacks)
       _callbacks->onNewSpecies(parent ? parent->id() : SID::INVALID, p->id());
 
     return p;
-  }
-
-  /// \overload
-  /// The species contribution monitor is build on the fly with the provided
-  /// contributions
-  Node_ptr makeNode (const SpeciesContribution &contrib) {
-    SID id = nextNodeID();
-    Contributors c (id);
-    c.update(contrib, Node::elligibilityTester(_nodes));
-    return makeNode(std::move(c));
   }
 
   /// \copydoc nodeAt
@@ -437,6 +432,7 @@ protected:
   friend void insertInto (uint step, const GENOME &g, Node_ptr species,
                           const DCCache &dccache, Callbacks *callbacks) {
 
+    using op = _details::DistanceMap::key_type;
     const uint k = species->enveloppe.size();
 
     auto &dist = species->distances;
@@ -448,7 +444,7 @@ protected:
       species->enveloppe.push_back(g);
       if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(), g.id());
       for (uint i=0; i<k; i++)
-        dist.at({i, k}) = dccache.distances[i];
+        dist[{i, k}] = dccache.distances[i];
 
     // Better enveloppe point ?
     } else {
@@ -476,10 +472,11 @@ protected:
           callbacks->onGenomeLeavesEnveloppe(species->id(), species->enveloppe[ec.than].id());
           callbacks->onGenomeEntersEnveloppe(species->id(), g.id());
         }
+
         species->enveloppe[ec.than] = g;
         for (uint i=0; i<k; i++)
           if (i != ec.than)
-            dist.at({i,ec.than}) = dccache.distances[i];
+            dist[op{i,ec.than}] = dccache.distances[i];
       }
     }
 
@@ -529,15 +526,18 @@ private:
   /// json \p j
   Node_ptr rebuildHierarchy(const json &j) {
     Contributors c = j["contribs"];
-    Node_ptr n = makeNode(std::move(c), false);
+    Node_ptr n = Node::make_shared(c);
+
+    _nodes.push_back(n);
 
     n->data = j["data"];
     n->enveloppe = j["envlp"].get<decltype(Node::enveloppe)>();
     const json jd = j["dists"];
     const json jc = j["children"];
 
+    using op = _details::DistanceMap::key_type;
     for (const auto &d: jd)
-      n->distances.at({d[0], d[1]}) = d[2];
+      n->distances[op{d[0], d[1]}] = d[2];
 
     for (const auto &c: jc)
       rebuildHierarchy(c);
@@ -572,6 +572,9 @@ public:
     uint i=0;
     pt._step = j[i++];
     pt._root = pt.rebuildHierarchy(j[i++]);
+
+    for (Node_ptr &n: utils::reverse(pt._nodes))
+      pt.updateContributions(n, {});
   }
 };
 
