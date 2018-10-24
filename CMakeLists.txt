@@ -39,11 +39,19 @@ endif()
 add_library(apt-core STATIC
     "src/core/crossover.h"
     "src/core/crossover.cpp"
-    "src/core/treetypes.hpp"
-    "src/core/phylogenictree.hpp"
-    "src/core/enveloppecriteria.cpp"
     "src/core/ptreeconfig.h"
     "src/core/ptreeconfig.cpp"
+
+    "src/core/tree/enumvector.hpp"
+    "src/core/tree/treetypes.h"
+    "src/core/tree/treetypes.cpp"
+    "src/core/tree/enveloppecriteria.cpp"
+    "src/core/tree/callbacks.hpp"
+    "src/core/tree/speciesdata.hpp"
+    "src/core/tree/speciescontributors.cpp"
+    "src/core/tree/speciescontributors.h"
+    "src/core/tree/node.hpp"
+    "src/core/tree/phylogenictree.hpp"
 )
 target_link_libraries(apt-core ${tools_LIBRARIES})
 

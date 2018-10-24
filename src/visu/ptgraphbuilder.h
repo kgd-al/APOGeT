@@ -4,7 +4,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsItem>
 
-#include "../core/phylogenictree.hpp"
+#include "../core/tree/phylogenictree.hpp"
 
 namespace gui {
 
@@ -28,7 +28,7 @@ struct PTreeBuildingCache {
   GUIItems &items;  ///< The graphics items cache data
 
   /// Callback type for managing node hovering events
-  using HoverCallback = std::function<void(phylogeny::TreeTypes::SID, bool)>;
+  using HoverCallback = std::function<void(phylogeny::SID, bool)>;
 
   /// Callback for managing node hovering events
   HoverCallback hoverCallback;
@@ -61,7 +61,7 @@ public:
   Visibilities visibilities;  ///< This node's current visibility values
 
   /// Helper alias to the species identificator
-  using SID = phylogeny::TreeTypes::SID;
+  using SID = phylogeny::SID;
 
   const SID id;  ///< The identificator of the associated species node
   Node *parent;   ///< The parent node (if any)
@@ -86,12 +86,12 @@ public:
   /// Build a graphic node out of a potential parent and PTree data
   template <typename PN, typename HC>
   Node (Node *parent, const PN &n, HC hoverCallback)
-    : id(n.id), parent(parent), data(n.data),
+    : id(n.id()), parent(parent), data(n.data),
       sid(QString::number(std::underlying_type<SID>::type(id))),
       path(nullptr), timeline(nullptr), hoverCallback(hoverCallback) {
 
     enveloppe = n.enveloppe.size();
-    children = n.children.size();
+    children = n.children().size();
 
     _alive = false;
     setOnSurvivorPath(false);
@@ -322,7 +322,7 @@ struct PTGraphBuilder {
     cache.items.scene->addItem(gn);
 
     // Process subspecies
-    for (const auto &n_: n.children)
+    for (const auto &n_: n.children())
       addSpecies(gn, *n_, cache);
 
     // Generate path to parent if needed

@@ -227,6 +227,9 @@ void PhylogenyViewer_base::genomeEntersEnveloppe (SID sid, GID) {
 
 void PhylogenyViewer_base::genomeLeavesEnveloppe (SID, GID) {}
 
+void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC) {
+  assert(false);
+}
 
 void PhylogenyViewer_base::renderTo (QString filename) {
   if (filename.isEmpty())

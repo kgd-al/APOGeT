@@ -1,6 +1,7 @@
 *.user
 *.png
 *.pt
+*.svg
 
 build*
 docs/*
