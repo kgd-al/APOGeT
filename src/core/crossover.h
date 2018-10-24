@@ -42,11 +42,13 @@ class SELF_AWARE_GENOME(BOCData) {
   /// Standard deviation for distances above optimal
   DECLARE_GENOME_FIELD(float, outbreedTolerance)
 
+  /// \cond internal
   /// Needs privileged access
   friend struct config::SAGConfigFile<BOCData>;
+  /// \endcond
 
 public:
-  /// Helper alias to the source of randomness
+  /// Helper alias to the source of randomness.
   using Dice = SelfAwareGenome<BOCData>::Dice;
 
   /// The possible sexes

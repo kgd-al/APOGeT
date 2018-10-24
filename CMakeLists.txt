@@ -13,10 +13,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
 
+
 ################################################################################
 ## Self dependancies
 ################################################################################
-
 
 find_package(tools REQUIRED)
 include_directories(${tools_INCLUDE_DIRS})
@@ -31,10 +31,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   message(STATUS "> Linking against manual clang installation")
 endif()
 
-################################################################################
-## Static libraries
-################################################################################
 
+################################################################################
+## Static library
+################################################################################
 
 add_library(apt-core STATIC
     "src/core/crossover.h"
@@ -118,7 +118,7 @@ option(WITH_DEBUG_INFO "Sets whether to maximize debug data collection" OFF)
 message(STATUS "With debug info " ${WITH_DEBUG_INFO})
 if(WITH_DEBUG_INFO)
     add_definitions(-DWITH_DEBUG_INFO)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g") # Enable debug info
+    string(APPEND CMAKE_CXX_FLAGS " -g") # Enable debug info
 
     # Enable small memory error detector (fuse=gold fixes linker errors)
 #    set(ASAN "-fsanitize=thread")

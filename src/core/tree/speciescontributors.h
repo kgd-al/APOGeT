@@ -71,7 +71,15 @@ public:
 /// Sorted collection of contributors for a species node.
 ///
 /// Use both for maintaining phylogenic data and determining the major
-/// contributor
+/// contributor.
+///
+/// The major contributor is defined as follow:
+/// Given A, an instance of contributors, return the first element in this (sorted)
+/// container that is flagged as elligible
+///
+/// A species B is elligible as another species A's parent iff:
+///   - B is not a node in A's subtree (including itself)
+///   - B is not younger than A (in terms of first appearance)
 class Contributors {
   /// The buffer containing the individual contributions
   std::vector<NodeContributor> vec;
@@ -102,12 +110,7 @@ public:
   /// main contributor
   SID update (Contribution sids, const ValidityEvaluator &elligible);
 
-  /// Update the main contributor cached variable so that:
-  /// if S = subtree(nodeID), X in S and Y not in S
-  /// [] -> INVALID
-  /// [X] -> INVALID
-  /// [X,Y,...] -> Y
-  /// [Y,...,X,...] -> Y
+  /// \return the id of the node's main contributor or SID::INVALID if none is found
   SID currentMain (void);
 
   /// \todo DON'T FORGET
@@ -128,6 +131,13 @@ public:
   static bool elligibile (SID lhs, SID rhs, const T &nodes) {
     auto n = nodes.at(lhs).get(),
          p = nodes.at(rhs).get();
+
+    // Do not allow younger species to serve as parent (would be quite ugly and
+    // is probably wrong anyway)
+    if (n->data.firstAppearance >= p->data.firstAppearance)
+      return false;
+
+    // Assert that candidate is not in n's subtree
     while (p && p != n)
       p = p->parent();
     return p != n;
