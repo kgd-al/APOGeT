@@ -77,6 +77,7 @@ if (NOT CLUSTER_BUILD)
 
     add_library(apt-gui STATIC
         "src/visu/phylogenyviewer.h"
+        "src/visu/layer.hpp"
         "src/visu/ptgraphbuilder.h"
         "src/visu/ptgraphbuilder.cpp"
         "src/visu/phylogenyviewer.cpp"
@@ -84,6 +85,7 @@ if (NOT CLUSTER_BUILD)
         "src/visu/graphicsviewzoom.cpp"
         "src/visu/graphicutils.h"
         "src/visu/graphicutils.cpp"
+
         "src/visu/standaloneviewer.hpp"
     )
     target_link_libraries(apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})

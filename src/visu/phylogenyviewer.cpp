@@ -78,7 +78,7 @@ auto makeSlider (Qt::Orientation orientation, const QString label,
 
 void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) {
   // Create cache
-  _items = {new QGraphicsScene(this), nullptr, nullptr, {}};
+  _items = {new QGraphicsScene(this), nullptr, nullptr, nullptr, {}};
 
   // Create view
   _view = new QGraphicsView(_items.scene, this);

@@ -95,16 +95,20 @@ public:
 
   /// Updates the species contributions manager and the species' main parent
   /// \returns the new species' main parent
-  Node* update (Contributors::Contribution sids, const Collection &nodes) {
+  Node* update (Contributors::Contributions sids, const Collection &nodes) {
     SID mainSID = contributors.update(sids, elligibilityTester(nodes));
-    return _parent = (mainSID == SID::INVALID) ? nullptr : nodes[mainSID].get();
+    return updateParent(mainSID, nodes);
   }
 
   /// Triggers a tree-wide recomputation of the elligibilities of all node
   /// contributors. Possible chain-reaction (multiple parent modifications)
-  void updateElligibilities (const Collection &nodes) {
-    assert(false);
+  ///
+  /// \returns the current (possibly changed?) parent
+  Node* updateElligibilities (const Collection &nodes) {
+    SID mainSID = contributors.updateElligibilities(elligibilityTester(nodes));
+    return updateParent(mainSID, nodes);
   }
+
 
   /// Stream this node. Mostly for debugging purpose.
   friend std::ostream& operator<< (std::ostream &os, const Node &n) {
@@ -128,6 +132,12 @@ public:
       os << "\t" << id() << " -> " << n->id() << ";\n";
       n->logTo(os);
     }
+  }
+
+private:
+  /// Updates the parent with the, possibily null, species identified by \p sid
+  Node* updateParent(SID sid, const Collection &nodes) {
+    return _parent = (sid == SID::INVALID) ? nullptr : nodes[sid].get();
   }
 };
 

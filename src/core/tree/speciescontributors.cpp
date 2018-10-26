@@ -7,38 +7,40 @@ auto debug = [] {
   return config::PTree::DEBUG_LEVEL() * config::PTree::DEBUG_CONTRIBUTORS();
 };
 
-bool operator== (const NodeContributor &lhs, const NodeContributor &rhs) {
+bool operator== (const Contributor &lhs, const Contributor &rhs) {
   return lhs.speciesID() == rhs.speciesID()
       && lhs.count() == rhs.count();
 }
 
-SID Contributors::update (Contribution sids,
+SID Contributors::update (Contributions ctbs,
                           const ValidityEvaluator &elligible) {
 
   assert(nodeID != SID::INVALID);
 
   uint i=0;
-  uint unprocessed = sids.size();
+  uint unprocessed = ctbs.size();
 
   if (debug() >= 1)
     std::cerr << "Updating contributions for " << nodeID << std::endl;
 
   // Ignore invalid(s)
-  sids.erase(SID::INVALID);
+  ctbs.erase(std::remove(ctbs.begin(), ctbs.end(), SID::INVALID),
+             ctbs.end());
 
   // Update already known contributors
   while(i < vec.size() && unprocessed > 0) {
-    auto &c = vec[i];
-    SID sid = c.speciesID();
-    uint k = sids.count(sid);
+    auto &ctor = vec[i];
+    SID sid = ctor.speciesID();
+    auto it = std::find(ctbs.begin(), ctbs.end(), sid);
 
-    if (k > 0) {
-      c += k;
-      unprocessed -= k;
-      sids.erase(sid);
+    if (it != ctbs.end()) {
+      Contribution &ction = *it;
+      ctor += ction.count;
+      unprocessed--;
+      ctbs.erase(it);
 
       if (debug() >= 2)
-        std::cerr << "\tAdded " << k << " at pos "
+        std::cerr << "\tAdded " << ction.count << " at pos "
                   << i << " (SID=" << sid << ")" << std::endl;
     }
 
@@ -46,24 +48,18 @@ SID Contributors::update (Contribution sids,
   }
 
   // Register new contributors
-  i = 0;
-  while (!sids.empty()) {
-    SID sid = *sids.begin();
-    auto range = sids.equal_range(sid);
-    uint k = std::distance(range.first, range.second);
-    sids.erase(sid);
-
-    bool e = elligible(nodeID, sid);
-    vec.emplace_back(sid, k, e);
+  for (Contribution &ction: ctbs) {
+    bool e = elligible(nodeID, ction.species);
+    vec.emplace_back(ction.species, ction.count, e);
 
     if (debug() >= 2)
-      std::cerr << "\tAppend " << k
-                << " (SID=" << sid << ", elligible ? " << std::boolalpha << e
-                << ")" << std::endl;
+      std::cerr << "\tAppend " << ction.count
+                << " (SID=" << ction.species << ", elligible ? "
+                << std::boolalpha << e << ")" << std::endl;
   }
 
   // sort by decreasing contribution
-  std::stable_sort(vec.begin(), vec.end());
+  std::stable_sort(vec.begin(), vec.end(), Contributor::CMP());
 
   return currentMain();
 }
@@ -86,6 +82,13 @@ SID Contributors::currentMain (void) {
   return mc.elligible() ? mc.speciesID() : SID::INVALID;
 }
 
+SID Contributors::updateElligibilities(const ValidityEvaluator &elligible) {
+  for (Contributor &c: vec)
+    c.setElligible(elligible(nodeID, c.speciesID()));
+
+  return currentMain();
+}
+
 /// Serialize Contributors \p c into a json
 void to_json (json &j, const Contributors &c) {
   j = {c.nodeID, c.vec};
@@ -100,7 +103,7 @@ void from_json (const json &j, Contributors &c) {
 
 std::ostream& operator<< (std::ostream &os, const Contributors &c) {
   os << "[ ";
-  for (const NodeContributor &nc: c.vec)
+  for (const Contributor &nc: c.vec)
     os << "{" << nc.speciesID() << "," << nc.count() << "} ";
   return os << "]";
 }

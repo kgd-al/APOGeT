@@ -8,6 +8,7 @@
 #include "../core/tree/treetypes.h"
 
 #include "ptgraphbuilder.h"
+#include "layer.hpp"
 
 /*!
  * \file phylogenyviewer.h
@@ -199,6 +200,11 @@ public:
     return PTreeBuildingCache {
       _config, _ptree.step(), _items,
       [this] (auto sid, auto entered) {
+        if (entered)
+              _items.contributors->show(sid, _items,
+                                        _ptree.nodeAt(sid)->contributors);
+        else  _items.contributors->hide();
+
         emit onSpeciesHoverEvent(sid, entered);
       }
     };

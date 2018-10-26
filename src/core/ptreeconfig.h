@@ -22,6 +22,9 @@ struct CFILE : public ConfigFile<CFILE> {
   /// Number of votes required to being considered as belonging
   DECLARE_PARAMETER(double, similarityThreshold)
 
+  /// Average compatibility required to being considered as member of species
+  DECLARE_PARAMETER(double, avgCompatibilityThreshold)
+
   /// Number of genome stored as enveloppe points
   DECLARE_PARAMETER(uint, enveloppeSize)
 
@@ -30,6 +33,9 @@ struct CFILE : public ConfigFile<CFILE> {
 
   /// Whether to bother drawing extinct paths
   DECLARE_PARAMETER(bool, winningPathOnly)
+
+  /// (Debug) selector for the species matching score computing type
+  DECLARE_DEBUG_PARAMETER(bool, FULL_CONTINUOUS, true)
 
   /// (Debug) selector for the enveloppe criteria
   DECLARE_DEBUG_PARAMETER(int, ENV_CRIT, 0)

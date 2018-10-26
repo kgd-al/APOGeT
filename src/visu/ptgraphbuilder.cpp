@@ -216,7 +216,7 @@ QRectF Path::boundingRect() const {
       .adjusted(-extra, -extra, extra, extra);
 }
 
-void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
+void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
   painter->setPen(_end->onSurvivorPath() ? HIGH_PEN : BASE_PEN);
   painter->drawPath(_shape);
 }
@@ -282,6 +282,57 @@ void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidge
   painter->drawEllipse(_points[2], END_POINT_SIZE, END_POINT_SIZE);
 }
 
+
+// ============================================================================
+// == Species contributions drawer
+// ============================================================================
+
+Contributors::Contributors (QGraphicsItem *parent) : QGraphicsItem(parent) {
+  setZValue(10);
+  pen.setColor(Qt::green);
+}
+
+
+
+void Contributors::show (SID sid, const GUIItems &items,
+                         const phylogeny::Contributors &contribs) {
+
+  Node *n = items.nodes.value(sid);
+
+  std::cerr << "Contributor data on hand:\n";
+  float totalWidth = 0;
+
+  for (auto &c: contribs)
+    if (c.speciesID() != n->id)  totalWidth += c.count();
+
+  paths.clear();
+  for (auto &c: contribs) {
+    float w = c.count() / totalWidth;
+    Node *nc = items.nodes.value(c.speciesID());
+    std::cerr << "\tnode " << c.speciesID() << " drawn by " << nc
+              << " with width " << w << std::endl;
+  }
+
+  std::cerr << __PRETTY_FUNCTION__ << " not doing anything" << std::endl;
+  QGraphicsItem::show();
+}
+
+void Contributors::hide (void) {
+  paths.clear();
+  QGraphicsItem::hide();
+}
+
+void Contributors::paint (QPainter *painter,
+                          const QStyleOptionGraphicsItem*, QWidget*) {
+
+  painter->save();
+  for (const Path &p: paths) {
+    pen.setWidth(p.width);
+    painter->setPen(pen);
+    painter->drawPath(p.path);
+  }
+  painter->restore();
+}
 
 // ============================================================================
 // == Graph borders and legends

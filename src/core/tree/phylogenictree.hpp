@@ -57,8 +57,8 @@ public:
   /// Helper alias to the type used to cache distance/compatibilities values
   using DCCache = _details::DCCache;
 
-  /// \copydoc Contributors::Contribution
-  using SpeciesContribution = typename Contributors::Contribution;
+  /// \copydoc Contributors::Contributions
+  using SpeciesContribution = typename Contributors::Contributions;
 
   /// Create an empty PTree
   PhylogenicTree(void) {
@@ -153,7 +153,7 @@ public:
       s1 = _nodes[fSID];
     }
 
-    SID sid = addGenome(g, s0, s1, {mSID, fSID});
+    SID sid = addGenome(g, s0, s1, mSID, fSID);
 
     if (Config::DEBUG_LEVEL())  std::cerr << std::endl;
     return sid;
@@ -292,7 +292,7 @@ protected:
     Node_ptr p = Node::make_shared(c);
     p->data.firstAppearance = _step;
     p->data.lastAppearance = _step;
-    p->data.count = 1;
+    p->data.count = 0;
 
     assert(p->contributors.getNodeID()
            == SID(std::underlying_type<SID>::type(_nextNodeID)-1));
@@ -315,9 +315,11 @@ protected:
     return const_cast<Node_ptr&>(std::as_const(*this).nodeAt(i));
   }
 
+  /// \todo remove one
   /// \return Whether \p g is similar enough to \p species
-  float speciesMatchingScore (const GENOME &g, Node_ptr species,
-                              DCCache &dccache) {
+  static float speciesMatchingScoreSimicontinuous (const GENOME &g,
+                                                   Node_ptr species,
+                                                   DCCache &dccache) {
     uint k = species->enveloppe.size();
 
     dccache.clear();
@@ -336,10 +338,85 @@ protected:
     return matable - Config::similarityThreshold() * k;
   }
 
+  /// \todo remove one
+  /// \return Whether \p g is similar enough to \p species
+  static float speciesMatchingScoreContinuous (const GENOME &g,
+                                               Node_ptr species,
+                                               DCCache &dccache) {
+    uint k = species->enveloppe.size();
+
+    dccache.clear();
+    dccache.reserve(k);
+
+    float avgCompat = 0;
+    for (const GENOME &e: species->enveloppe) {
+      double d = distance(g, e);
+      double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
+
+      avgCompat += c;
+      dccache.push_back(d, c);
+    }
+
+    assert(dccache.size() == k);
+    return avgCompat / float(k) - Config::avgCompatibilityThreshold();
+  }
+
+  /// \todo remove
+  /// Proxy for delegating score computation to the appropriate function
+  /// \see Config::FULL_CONTINUOUS
+  static float speciesMatchingScore (const GENOME &g, Node_ptr species,
+                                     DCCache &dccache) {
+    auto f =
+      Config::FULL_CONTINUOUS() ?
+          speciesMatchingScoreContinuous
+        : speciesMatchingScoreSimicontinuous;
+    return f(g, species, dccache);
+  }
+
+  /// Finds the best derived species amongst the list of parents
+  void findBestDerived (const GENOME &g, std::vector<Node_ptr> species,
+                        Node_ptr &bestSpecies, float &bestScore,
+                        DCCache &bestSpeciesDCCache) {
+
+    DCCache dccache;
+    std::vector<size_t> sizes;
+    size_t max = 0;
+
+    sizes.reserve(species.size());
+    for (Node_ptr &sp: species) {
+      size_t s = sp->children().size();
+      sizes.push_back(s);
+      if (max < s)  max = s;
+    }
+
+    if (debug() >= 2) std::cerr << "\tComputing scores:\n";
+    for (uint i=0; i<max; i++) {
+      for (uint k=0; k<species.size(); k++) {
+        if (sizes[k] <= i)  continue;
+
+        Node_ptr &subspecies = species[k]->child(i);
+        float score = speciesMatchingScore(g, subspecies, dccache);
+
+        if (debug() >= 2)
+          std::cerr << "\t\t" << subspecies->id() << ": " << score << std::endl;
+
+        if (bestScore < score) {
+          bestSpecies = subspecies;
+          bestScore = score;
+          bestSpeciesDCCache = dccache;
+        }
+
+        if (bestScore > 0)
+          return;
+      }
+    }
+  }
+
   /// Find the appropriate place for \p g in the subtree(s) rooted at
   ///  \p species0 (and species1)
+  /// \todo THis function seems ugly and hard to maintain
   SID addGenome (const GENOME &g, Node_ptr species0, Node_ptr species1,
-                 const SpeciesContribution &contrib) {
+                 SID sid0, SID sid1) {
 
     if (debug()) {
       std::cerr << "Attempting to add genome " << g.id()
@@ -356,17 +433,43 @@ protected:
     float bestScore = -std::numeric_limits<float>::max();
 
     std::vector<Node_ptr> species;
+    SpeciesContribution contrib;
+    std::map<SID, float> scores;
+
+    // Register first species
     species.push_back(species0);
-    if (species1) species.push_back(species0);
+    contrib.emplace_back(sid0, 1 + (sid0 == sid1));
+
+    // Register (if needed) second species
+    assert((species1 == nullptr) == (sid0 == sid1));
+    if (species1) {
+      species.push_back(species1);
+      contrib.emplace_back(sid1, 1);
+    }
 
     // Find best top-level species
-    for (Node_ptr s: species) {
+    for (uint i=0; i<species.size(); i++) {
+      Node_ptr s = species[i];
       float score = speciesMatchingScore(g, s, dccache);
       if (bestScore < score) {
         bestSpecies = s;
         bestScore = score;
         bestSpeciesDCCache = dccache;
       }
+      scores[s->id()] = score;
+    }
+
+    // Order the contributions to put the best 'parent' first
+    std::sort(contrib.begin(), contrib.end(),
+              [&scores] (const Contribution &lhs, const Contribution &rhs) {
+                return scores.at(lhs.species) >= scores.at(rhs.species);
+    });
+
+    if (debug() >= 2) {
+      std::cerr << "\ttop-level scores:";
+      for (auto &it: scores)
+        std::cerr << " {" << it.first << ", " << it.second << "}";
+      std::cerr << std::endl;
     }
 
     // Compatible enough with current species ?
@@ -381,33 +484,18 @@ protected:
     }
 
     // Find best derived species
-    uint i=0, k = 0;
-    size_t max = species0->children().size();
-    if (species1) max = std::max(max, species1->children().size());
-    while (bestScore <= 0 && i < max) {
-      Node_ptr &subspecies = species[k]->child(i);
-      float score = speciesMatchingScore(g, subspecies, dccache);
-      if (bestScore < score) {
-        bestSpecies = subspecies;
-        bestScore = score;
-        bestSpeciesDCCache = dccache;
-      }
-
-      if (!species1 || species[1-k]->children().size() <= i)
-        i++;
-      else {
-        if (k==1) i++;
-        k = 1 - k;
-      }
-    }
+    findBestDerived(g, species, bestSpecies, bestScore, bestSpeciesDCCache);
 
     // Belongs to subspecies ?
     if (bestScore > 0) {
       if (debug())
-        std::cerr << "Compatible with " << bestSpecies->id()
+        std::cerr << "\tCompatible with " << bestSpecies->id()
                   << " (score=" << bestScore << ")" << std::endl;
       return updateSpeciesContents(g, bestSpecies, bestSpeciesDCCache, contrib);
-    }
+
+    } else if (debug())
+      std::cerr << "\tIncompatible with all subspecies (score=" << bestScore
+                << ")" << std::endl;
 
     // Need to create new species
     if (Config::simpleNewSpecies()) {
@@ -512,11 +600,38 @@ protected:
       // Parent changed. Update and notify
       oldMC->delChild(s);
       newMC->addChild(s);
-      _root->updateElligibilities(_nodes);
+      updateElligibilities();
+
+#ifndef NDEBUG
+      /// Check that no other nodes have changed their parent
+      checkMC();
+#endif
 
       _callbacks->onMajorContributorChanged(s->id(), oldMC->id(), newMC->id());
     }
   }
+
+  /// Triggers a tree-wide update of all contributors elligibility
+  /// \todo remove test
+  void updateElligibilities (void) {
+    for (Node_ptr &n: _nodes) {
+      Node *oldMC = n->parent(),
+           *newMC = n->updateElligibilities(_nodes);
+
+      assert(oldMC == newMC);
+    }
+  }
+
+#ifndef NDEBUG
+  /// Debug function
+  void checkMC (void) {
+    for (Node_ptr &n: _nodes) {
+      auto pc = n->parent()->children();
+      if (std::find(pc.begin(), pc.end(), n) == pc.end())
+        throw std::logic_error("Node is not attached to the correct parent");
+    }
+  }
+#endif
 
 // =============================================================================
 // == Json conversion

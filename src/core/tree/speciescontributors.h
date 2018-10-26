@@ -1,4 +1,4 @@
-#ifndef SPECIESCONTRIBUTORS_H
+﻿#ifndef SPECIESCONTRIBUTORS_H
 #define SPECIESCONTRIBUTORS_H
 
 /*!
@@ -12,17 +12,17 @@
 namespace phylogeny {
 
 /// Contributor field for a species node
-class NodeContributor {
+class Contributor {
   SID _speciesID;  ///< Reference to the contributor
   uint _count;  ///< Number of contributions
   bool _elligible;  ///< Valid candidate for being the major contributor ?
 
 public:
   /// No-argument contructor
-  NodeContributor(void) : NodeContributor(SID::INVALID, -1, false) {}
+  Contributor(void) : Contributor(SID::INVALID, -1, false) {}
 
   /// Constructor
-  NodeContributor(SID sid, uint initialCount, bool elligible)
+  Contributor(SID sid, uint initialCount, bool elligible)
     : _speciesID(sid), _count(initialCount), _elligible(elligible) {}
 
   /// Accessor to the contributor reference
@@ -41,30 +41,52 @@ public:
 
   /// Updates the validity of this contributor
   /// \see _elligible
-  void setElligible (void) {  _elligible = true;  }
+  void setElligible (bool e) {  _elligible = e;  }
 
   /// Increment the number of contributions
-  NodeContributor& operator+=(uint k) {
+  Contributor& operator+=(uint k) {
     _count += k;
     return *this;
   }
 
+  /// Contributor comparison functor
+  ///
   /// Compare according to the respective number of contributions
-  friend bool operator< (const NodeContributor &lhs, const NodeContributor &rhs) {
-    // bigger contributions go first in the array
-    return !(lhs._count < rhs._count);
-  }
+  struct CMP {
+
+    /// Contributor comparison function
+    ///
+    /// \copydetails CMP
+    bool operator() (const Contributor &lhs, const Contributor &rhs) {
+      // bigger contributions go first in the array
+      return lhs._count > rhs._count;
+    }
+  };
 
   /// Serialize Contributor \p c into a json
-  friend void to_json (json &j, const NodeContributor &c) {
+  friend void to_json (json &j, const Contributor &c) {
     j = {c._speciesID, c._count};
   }
 
   /// Deserialize Contributor \p c from json \p j
-  friend void from_json (const json &j, NodeContributor &c) {
+  friend void from_json (const json &j, Contributor &c) {
     uint i=0;
     c._speciesID = j[i++];
     c._count = j[i++];
+  }
+};
+
+/// Describes a contribution update
+struct Contribution {
+  SID species;  ///< The contributing species
+  uint count;   ///< The contribution amount
+
+  /// Constructor
+  Contribution (SID s, uint c) : species(s), count(c) {}
+
+  /// Allow comparing a contribution's species id directly to another sid
+  friend bool operator== (const Contribution &c, SID sid) {
+    return c.species == sid;
   }
 };
 
@@ -82,14 +104,14 @@ public:
 ///   - B is not younger than A (in terms of first appearance)
 class Contributors {
   /// The buffer containing the individual contributions
-  std::vector<NodeContributor> vec;
+  std::vector<Contributor> vec;
 
   /// The associated node identificator
   SID nodeID;
 
 public:
   /// Alias for the data structure containing the contributing SIDs
-  using Contribution = std::multiset<SID>;
+  using Contributions = std::vector<Contribution>;
 
   /// Alias for the function type used to check is a species is elligible as a
   /// major contributor
@@ -108,13 +130,26 @@ public:
 
   /// Register new contributions, updates internal data and returns the new
   /// main contributor
-  SID update (Contribution sids, const ValidityEvaluator &elligible);
+  SID update (Contributions ctbs, const ValidityEvaluator &elligible);
 
   /// \return the id of the node's main contributor or SID::INVALID if none is found
   SID currentMain (void);
 
-  /// \todo DON'T FORGET
-  void updateValidites (void);
+  /// Updates, for each contributions, whether it is coming from a valid
+  /// candidate to being a major contributor or not
+  ///
+  /// \return the updated parent
+  SID updateElligibilities (const ValidityEvaluator &elligible);
+
+  /// Allow const iteration of the underlying container
+  const auto begin (void) const {
+    return vec.begin();
+  }
+
+  /// \copydoc begin
+  const auto end (void) const {
+    return vec.end();
+  }
 
   /// Serialize Contributors \p c into a json
   friend void to_json (json &j, const Contributors &c);
@@ -134,7 +169,7 @@ public:
 
     // Do not allow younger species to serve as parent (would be quite ugly and
     // is probably wrong anyway)
-    if (n->data.firstAppearance >= p->data.firstAppearance)
+    if (n->data.firstAppearance <= p->data.firstAppearance)
       return false;
 
     // Assert that candidate is not in n's subtree

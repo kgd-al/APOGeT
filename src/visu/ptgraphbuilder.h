@@ -230,6 +230,40 @@ struct Timeline : public QGraphicsItem {
   void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
 };
 
+/// Graphics item displaying a node's contributor
+struct Contributors : public QGraphicsItem {
+
+  /// Helper alias to the species identificator
+  using SID = phylogeny::SID;
+
+  /// Describes a path portion
+  struct Path {
+    QPainterPath path; ///< The Qt path
+    float width;  ///< The path width
+  };
+  QVector<Path> paths;  ///< The paths connecting to the contributors
+
+  QPen pen; ///< The used to stroke the paths
+
+  /// Builds a contributors drawer
+  Contributors (QGraphicsItem *parent);
+
+  /// Show the drawer for the provided node
+  void show (SID sid, const GUIItems &items,
+             const phylogeny::Contributors &contribs);
+
+  /// Hide the drawer
+  void hide (void);
+
+  /// \returns the same bounding rect as its parent
+  QRectF boundingRect(void) const {
+    return parentItem()->boundingRect();
+  }
+
+  /// Paints the paths to the various contributors
+  void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*);
+};
+
 /// Graphics item managing the graph's boundaries and legend
 struct Border : public QGraphicsItem {
   bool empty; ///< Whether or not any data was inputed in the associated graph
@@ -279,6 +313,9 @@ struct GUIItems {
   Border *border; ///< Border & legend manager
   Node *root; ///< Root of the graph's tree
 
+  /// Species contributions drawer
+  Contributors *contributors;
+
   QMap<Node::SID, Node*> nodes;  ///< Lookup table for the graphics nodes
 };
 
@@ -304,6 +341,8 @@ struct PTGraphBuilder {
 
     cache.items.border->setEmpty(!bool(pt.root()));
     cache.items.border->setHeight(pt.step());
+
+    cache.items.contributors = new Contributors(cache.items.border);
 
     cache.items.scene->setSceneRect(cache.items.border->boundingRect());
   }
