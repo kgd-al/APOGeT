@@ -47,7 +47,7 @@ public:
   /// Creates a node from a contributors collection (hidden from user. use the
   /// make_shared version)
   explicit Node (Contributors &&contribs, const cookie&)
-    : contributors(contribs) {}
+    : _parent(nullptr), contributors(contribs) {}
 
   /// \returns a pointer to a newly allocated node created from the provided
   /// arguments

@@ -65,7 +65,7 @@ public:
 
   /// Serialize Contributor \p c into a json
   friend void to_json (json &j, const Contributor &c) {
-    j = {c._speciesID, c._count};
+    j = {c._speciesID, c._count, c._elligible};
   }
 
   /// Deserialize Contributor \p c from json \p j
@@ -73,6 +73,7 @@ public:
     uint i=0;
     c._speciesID = j[i++];
     c._count = j[i++];
+    c._elligible = j[i++];
   }
 };
 

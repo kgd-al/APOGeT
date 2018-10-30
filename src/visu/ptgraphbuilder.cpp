@@ -28,6 +28,8 @@ static constexpr float NODE_SIZE = 2 * (NODE_RADIUS + NODE_MARGIN);
 static constexpr float END_POINT_SIZE = NODE_RADIUS / 4;
 
 // == Z-values ======================================================
+static constexpr int CONTRIBUTORS_LEVEL = 10;
+
 static constexpr int NODE_SURVIVOR_LEVEL = 2;
 static constexpr int NODE_EXCTINCT_LEVEL = 1;
 
@@ -166,8 +168,9 @@ void Node::updateNode (bool alive) {
 }
 
 void Node::setOnSurvivorPath (bool osp) {
-  _onSurvivorPath = osp;
-  setZValue(_onSurvivorPath ? NODE_SURVIVOR_LEVEL : NODE_EXCTINCT_LEVEL);
+  bool s = _onSurvivorPath = osp;
+  setZValue(s ? NODE_SURVIVOR_LEVEL : NODE_EXCTINCT_LEVEL);
+  if (path) path->setZValue(PATHS_LEVEL + s);
 }
 
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
@@ -287,23 +290,31 @@ void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidge
 // == Species contributions drawer
 // ============================================================================
 
-Contributors::Contributors (QGraphicsItem *parent) : QGraphicsItem(parent) {
-  setZValue(10);
+Contributors::Contributors (QGraphicsItem *bounds) : boundsProvider(bounds) {
+  setZValue(CONTRIBUTORS_LEVEL);
   pen.setColor(Qt::green);
 }
-
-
 
 void Contributors::show (SID sid, const GUIItems &items,
                          const phylogeny::Contributors &contribs) {
 
+  std::cerr << "Overlaying" << std::endl;
+
+  // Retrieve graphic item of given species
   Node *n = items.nodes.value(sid);
+  assert(n->id == sid);
 
-  std::cerr << "Contributor data on hand:\n";
+  // Retrieve all of its ancestors
+  std::vector<Node*> np;
+  {
+    Node *p = n;
+    while (p) np.push_back(p), p = p->parent;
+  }
+
+  // Total contribution count (excluding itself)
   float totalWidth = 0;
-
   for (auto &c: contribs)
-    if (c.speciesID() != n->id)  totalWidth += c.count();
+    if (c.speciesID() != sid)  totalWidth += c.count();
 
   paths.clear();
   for (auto &c: contribs) {
@@ -311,10 +322,31 @@ void Contributors::show (SID sid, const GUIItems &items,
     Node *nc = items.nodes.value(c.speciesID());
     std::cerr << "\tnode " << c.speciesID() << " drawn by " << nc
               << " with width " << w << std::endl;
+
+    Node *p = nc;
+    auto it = std::find(np.begin(), np.end(), p);
+    while (it == np.end()) {
+      PathID pid { p, p->parent };
+      auto pit = paths.find(pid);
+      if (pit == paths.end()) {
+        QPainterPath pp;
+        pp.addPath(p->path->_shape);
+        paths.insert(pid, {pp, w});
+
+      } else
+        pit.value().width += w;
+
+      p = p->parent;
+      assert(p);
+
+      it = std::find(np.begin(), np.end(), p);
+    }
   }
 
-  std::cerr << __PRETTY_FUNCTION__ << " not doing anything" << std::endl;
+  std::cerr << std::endl;
+
   QGraphicsItem::show();
+  update();
 }
 
 void Contributors::hide (void) {
@@ -327,7 +359,7 @@ void Contributors::paint (QPainter *painter,
 
   painter->save();
   for (const Path &p: paths) {
-    pen.setWidth(p.width);
+    pen.setWidth(p.width * 50);
     painter->setPen(pen);
     painter->drawPath(p.path);
   }

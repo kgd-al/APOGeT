@@ -134,7 +134,7 @@ public:
     // Ensure that the root exists
     if (!_root) {
       _root = makeNode(SpeciesContribution{});
-      return updateSpeciesContents(g, _root, DCCache{});
+      return updateSpeciesContents(g, _root, DCCache{}, SpeciesContribution{});
     }
 
     // Retrieve parent's species
@@ -503,7 +503,8 @@ protected:
       dccache.clear();
       if (debug())
         std::cerr << "Created new species " << subspecies->id() << std::endl;
-      return updateSpeciesContents(g, subspecies, dccache);
+      return updateSpeciesContents(g, subspecies, dccache,
+                                   SpeciesContribution{});
 
     } else
       assert(false);
@@ -576,7 +577,7 @@ protected:
   /// and registering the GID>SID association
   SID updateSpeciesContents(const GENOME &g, Node_ptr s,
                             const DCCache &cache,
-                            const SpeciesContribution &ctb = {}) {
+                            const SpeciesContribution &ctb) {
 
     insertInto(_step, g, s, cache, _callbacks);
     if (!ctb.empty()) updateContributions(s, ctb);
@@ -585,29 +586,37 @@ protected:
   }
 
   /// Update species \p s contributions with the provided values
-  void updateContributions (Node_ptr s, const SpeciesContribution &contrib) {
+  void updateContributions (Node_ptr s, const SpeciesContribution &contrib,
+                            bool fromFile = false) {
     Node *oldMC = s->parent(),
          *newMC = s->update(contrib, _nodes);
+
+    // No node (except the primordial species which cannot be re-assigned)
+    // should be parentless. Except when creating a node
+    assert(s->id() == SID(0) || oldMC || contrib.empty());
 
     if (oldMC != newMC) {
       /// \todo remove
       if (!oldMC || !newMC)
         s->update({}, _nodes);
 
-      assert(oldMC);
       assert(newMC);
 
       // Parent changed. Update and notify
-      oldMC->delChild(s);
+      if (oldMC)  oldMC->delChild(s);
       newMC->addChild(s);
-      updateElligibilities();
+
+      if (!fromFile) {
+        updateElligibilities();
 
 #ifndef NDEBUG
       /// Check that no other nodes have changed their parent
-      checkMC();
+        checkMC();
 #endif
 
-      _callbacks->onMajorContributorChanged(s->id(), oldMC->id(), newMC->id());
+        _callbacks->onMajorContributorChanged(s->id(),
+                                              oldMC->id(), newMC->id());
+      }
     }
   }
 
@@ -618,7 +627,7 @@ protected:
       Node *oldMC = n->parent(),
            *newMC = n->updateElligibilities(_nodes);
 
-      assert(oldMC == newMC);
+      assert(!oldMC || oldMC == newMC);
     }
   }
 
@@ -626,6 +635,12 @@ protected:
   /// Debug function
   void checkMC (void) {
     for (Node_ptr &n: _nodes) {
+      if (!n->parent()) {
+        if (n->id() != SID(0))
+          throw std::logic_error("Parent-less node is not valid (i.e. not 0)");
+        continue;
+      }
+
       auto pc = n->parent()->children();
       if (std::find(pc.begin(), pc.end(), n) == pc.end())
         throw std::logic_error("Node is not attached to the correct parent");
@@ -661,18 +676,15 @@ private:
   }
 
 public:
-  /// Serialise PTree \p pt into a json
-  friend void to_json (json &j, const PhylogenicTree &pt) {
-    j = {pt._step, *pt._root};
-  }
-
   /// Serialize Node \p n into a json
-  friend void to_json (json &j, const Node &n) {
-    json jd;
-    for (const auto &d: n.distances) jd.push_back({d.first.first, d.first.second, d.second});
+  static json toJson (const Node &n) {
+    json j, jd, jc;
 
-    json jc;
-    for (const auto &c: n.children()) jc.push_back(*c);
+    for (const auto &d: n.distances)
+      jd.push_back({d.first.first, d.first.second, d.second});
+
+    for (const auto &c: n.children())
+      jc.push_back(toJson(*c));
 
     j["id"] = n.id();
     j["data"] = n.data;
@@ -680,6 +692,13 @@ public:
     j["contribs"] = n.contributors;
     j["dists"] = jd;
     j["children"] = jc;
+
+    return j;
+  }
+
+  /// Serialise PTree \p pt into a json
+  friend void to_json (json &j, const PhylogenicTree &pt) {
+    j = {pt._step, toJson(*pt._root)};
   }
 
   /// Deserialise PTree \p pt from json \p j
@@ -688,8 +707,45 @@ public:
     pt._step = j[i++];
     pt._root = pt.rebuildHierarchy(j[i++]);
 
-    for (Node_ptr &n: utils::reverse(pt._nodes))
-      pt.updateContributions(n, {});
+    // Re-order according to species identificator
+    std::sort(pt._nodes.begin(), pt._nodes.end(),
+              [] (const Node_ptr &lhs, const Node_ptr &rhs) {
+      return lhs->id() < rhs->id();
+    });
+
+    // Ensure correct parenting
+    for (Node_ptr &n: pt._nodes)
+      pt.updateContributions(n, {}, true);
+
+#ifndef NDEBUG
+    pt.checkMC();
+#endif
+  }
+
+  /// Stores itself at the given location
+  bool saveTo (const std::string &filename) {
+    std::ofstream ofs (filename);
+    if (!ofs) {
+      std::cerr << "Unable to open '" << filename << "' for writing"
+                << std::endl;
+      return false;
+    }
+
+    ofs << json(*this).dump(2);
+    return true;
+  }
+
+  /// \returns a phylogenic tree rebuilt from data at the given location
+  static PhylogenicTree readFrom (const std::string &filename ) {
+    std::ifstream ifs (filename);
+    if (!ifs)
+      throw std::invalid_argument ("Unable to open '" + filename
+                                   + "' for reading");
+
+    else {
+      PhylogenicTree pt = json::parse(utils::readAll(filename));
+      return pt;
+    }
   }
 };
 

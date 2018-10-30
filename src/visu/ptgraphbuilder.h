@@ -236,17 +236,31 @@ struct Contributors : public QGraphicsItem {
   /// Helper alias to the species identificator
   using SID = phylogeny::SID;
 
+  /// Identificator of a path between two nodes
+  struct PathID {
+    Node *from; ///< Source node
+    Node *to;   ///< Destination node
+
+    /// Compare two path identificators in lexicographic order
+    friend bool operator< (const PathID &lhs, const PathID &rhs) {
+      return lhs.from != rhs.from ? lhs.from < rhs.from : lhs.to < rhs.to;
+    }
+  };
+
   /// Describes a path portion
   struct Path {
     QPainterPath path; ///< The Qt path
     float width;  ///< The path width
   };
-  QVector<Path> paths;  ///< The paths connecting to the contributors
+
+  QMap<PathID, Path> paths;  ///< The paths connecting to the contributors
 
   QPen pen; ///< The used to stroke the paths
 
+  QGraphicsItem *boundsProvider;  ///< The graphic item providing the paint area
+
   /// Builds a contributors drawer
-  Contributors (QGraphicsItem *parent);
+  Contributors (QGraphicsItem *bounds);
 
   /// Show the drawer for the provided node
   void show (SID sid, const GUIItems &items,
@@ -255,9 +269,9 @@ struct Contributors : public QGraphicsItem {
   /// Hide the drawer
   void hide (void);
 
-  /// \returns the same bounding rect as its parent
+  /// \returns the same bounding rect as the graph's bounds
   QRectF boundingRect(void) const {
-    return parentItem()->boundingRect();
+    return boundsProvider->boundingRect();
   }
 
   /// Paints the paths to the various contributors
@@ -343,6 +357,7 @@ struct PTGraphBuilder {
     cache.items.border->setHeight(pt.step());
 
     cache.items.contributors = new Contributors(cache.items.border);
+    cache.items.scene->addItem(cache.items.contributors);
 
     cache.items.scene->setSceneRect(cache.items.border->boundingRect());
   }
@@ -355,7 +370,7 @@ struct PTGraphBuilder {
 
     // Update related cache values
     if (parent)
-          parent->subnodes.push_front(gn);
+          parent->subnodes.push_back(gn);
     else  cache.items.root = gn;
     cache.items.nodes[gn->id] = gn;
     cache.items.scene->addItem(gn);
