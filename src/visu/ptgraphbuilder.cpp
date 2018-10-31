@@ -28,14 +28,15 @@ static constexpr float NODE_SIZE = 2 * (NODE_RADIUS + NODE_MARGIN);
 static constexpr float END_POINT_SIZE = NODE_RADIUS / 4;
 
 // == Z-values ======================================================
-static constexpr int CONTRIBUTORS_LEVEL = 10;
 
-static constexpr int NODE_SURVIVOR_LEVEL = 2;
-static constexpr int NODE_EXCTINCT_LEVEL = 1;
+static constexpr int NODE_SURVIVOR_LEVEL = 11;
+static constexpr int NODE_EXCTINCT_LEVEL = 10;
 
-static constexpr int PATHS_LEVEL = -1;
-static constexpr int TIMELINES_LEVEL = -2;
-static constexpr int BOUNDS_LEVEL = -10;
+static constexpr int CONTRIBUTORS_LEVEL = 0;
+
+static constexpr int PATHS_LEVEL = -10;
+static constexpr int TIMELINES_LEVEL = -11;
+static constexpr int BOUNDS_LEVEL = -20;
 
 // == Paint style ===================================================
 
@@ -100,6 +101,25 @@ struct PolarCoordinates {
   }
 };
 
+
+// ============================================================================
+// == Graph node
+// ============================================================================
+
+QPainterPath makeArc (const QPointF &p0, const QPointF &p1) {
+  double a0 = PolarCoordinates::primaryAngle(p0);
+  double a1 = PolarCoordinates::primaryAngle(p1);
+  double r1 = PolarCoordinates::length(p1);
+
+  std::cerr << "Arc(" << a0 << ", " << a1 << ", " << r1 << ")" << std::endl;
+
+  QPainterPath path;
+  path.moveTo(p1);
+  path.arcTo(QRect(-r1, -r1, 2*r1, 2*r1), -qRadiansToDegrees(a1),
+             qRadiansToDegrees(a1 - a0));
+
+  return path;
+}
 
 // ============================================================================
 // == Graph node
@@ -201,14 +221,7 @@ void Path::invalidatePath(void) {
   _shape = QPainterPath();
   _shape.setFillRule(Qt::WindingFill);
 
-  double a0 = PolarCoordinates::primaryAngle(_start->pos());
-
-  const QPointF p1 = _end->scenePos();
-  double a1 = PolarCoordinates::primaryAngle(p1);
-  double r1 = PolarCoordinates::length(p1);
-
-  _shape.moveTo(p1);
-  _shape.arcTo(QRect(-r1, -r1, 2*r1, 2*r1), -qRadiansToDegrees(a1), qRadiansToDegrees(a1 - a0));
+  _shape.addPath(makeArc(_start->scenePos(), _end->scenePos()));
   _shape.addEllipse(_shape.pointAtPercent(1), END_POINT_SIZE, END_POINT_SIZE);
 }
 
@@ -326,11 +339,11 @@ void Contributors::show (SID sid, const GUIItems &items,
     Node *p = nc;
     auto it = std::find(np.begin(), np.end(), p);
     while (it == np.end()) {
-      PathID pid { p, p->parent };
+      PathID pid { p, *it };
       auto pit = paths.find(pid);
       if (pit == paths.end()) {
         QPainterPath pp;
-        pp.addPath(p->path->_shape);
+        pp.addPath(makeArc(p->parent->scenePos(), p->scenePos()));
         paths.insert(pid, {pp, w});
 
       } else
@@ -359,7 +372,7 @@ void Contributors::paint (QPainter *painter,
 
   painter->save();
   for (const Path &p: paths) {
-    pen.setWidth(p.width * 50);
+    pen.setWidthF(PATH_WIDTH * (1 + p.width));
     painter->setPen(pen);
     painter->drawPath(p.path);
   }

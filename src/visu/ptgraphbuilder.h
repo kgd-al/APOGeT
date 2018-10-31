@@ -370,7 +370,7 @@ struct PTGraphBuilder {
 
     // Update related cache values
     if (parent)
-          parent->subnodes.push_back(gn);
+          parent->subnodes.push_front(gn);
     else  cache.items.root = gn;
     cache.items.nodes[gn->id] = gn;
     cache.items.scene->addItem(gn);
