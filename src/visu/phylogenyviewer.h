@@ -50,6 +50,16 @@ public:
   /// Intercepted to allow for tree autofitting
   void resizeEvent(QResizeEvent *event);
 
+  /// \returns the radius of the border
+  auto radius (void) const {
+    return _items.border->radius;
+  }
+
+  /// \returns the pen of the requested type
+  QPen pathPen (details::PenType t) {
+    return _items.pens.value(t);
+  }
+
   /// \return the default configuration
   static auto defaultConfig (void) {
     return Config{};
@@ -123,6 +133,9 @@ public slots:
   /// Prints the current scene into a pixmap of size \p requestedSize
   QPixmap renderToPixmap (const QSize &requestedSize) const;
 
+  /// Process a hover event
+  virtual void hoverEvent (SID sid, bool entered) = 0;
+
 protected:
   /// The graphics config
   Config _config;
@@ -136,6 +149,12 @@ protected:
   /// Constructor delegate called by template instantiations
   void constructorDelegate (uint steps,
                             Direction direction = Direction::LeftToRight);
+
+  /// Ensure pens are consistent witht the current state of the ptree
+  void updatePens (void) {
+    float w = PTGraphBuilder::pathWidth(radius());
+    for (QPen& p: _items.pens) p.setWidthF(w);
+  }
 
   /// Apply function \p f to all of the scene's current nodes
   template <typename F>
@@ -198,15 +217,7 @@ public:
   /// Helper function for getting a tree building cache
   auto cache (void) {
     return PTreeBuildingCache {
-      _config, _ptree.step(), _items,
-      [this] (auto sid, auto entered) {
-        if (entered)
-              _items.contributors->show(sid, _items,
-                                        _ptree.nodeAt(sid)->contributors);
-        else  _items.contributors->hide();
-
-        emit onSpeciesHoverEvent(sid, entered);
-      }
+      this, _config, _ptree.step(), _items
     };
   }
 
@@ -215,6 +226,8 @@ public:
     auto c = cache();
     Builder::fillScene(_ptree, c);
     Builder::updateLayout(_items);
+
+    updatePens();
     makeFit(_config.autofit);
   }
 
@@ -223,7 +236,6 @@ public:
     PhylogenyViewer_base::render(_ptree.step());
   }
 
-public:
   /// Process a new species event (add a new node to the graph)
   void newSpecies (SID pid, SID sid) {
     auto c = cache();
@@ -233,6 +245,16 @@ public:
     Builder::updateLayout(_items);
     _items.border->setEmpty(false);
     _view->update();
+  }
+
+protected:
+  void hoverEvent (SID sid, bool entered) override {
+    if (entered)
+          _items.contributors->show(sid, _items,
+                                    _ptree.nodeAt(sid)->contributors);
+    else  _items.contributors->hide();
+
+    emit onSpeciesHoverEvent(sid, entered);
   }
 
 private:

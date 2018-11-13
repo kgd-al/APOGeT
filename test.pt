@@ -1,50 +1,39 @@
 [
-  1000,
+  "phylogenic tree",
+  2000,
   {
     "id": 0,
-    "contribs": [ 0, [] ],
-    "data": [ 0, 503, 100 ],
+    "contribs": [],
+    "data": [ 0, 2000, 100 ],
     "dists": [],
     "envlp": [ {}, {}, {}, {}, {} ],
     "children": [
       {
         "id": 1,
-        "contribs": [
-          1,
-          [ [ 0, 100, true ] ]
-        ],
-        "data": [ 100, 600, 100 ],
+        "contribs": [ [ 0, 100, true ] ],
+        "data": [ 100, 2000, 100 ],
         "dists": [],
         "envlp": [ {}, {}, {}, {}, {} ],
         "children": [
           {
             "id": 3,
-            "contribs": [
-              1,
-              [ [ 1, 100, true ] ]
-            ],
-            "data": [ 200, 700, 100 ],
+            "contribs": [ [ 1, 100, true ] ],
+            "data": [ 300, 2000, 100 ],
             "dists": [],
             "envlp": [ {}, {}, {}, {}, {} ],
             "children": [
               {
                 "id": 5,
-                "contribs": [
-                  1,
-                  [ [ 3, 100, true ] ]
-                ],
-                "data": [ 300, 800, 100 ],
+                "contribs": [ [ 3, 100, true ] ],
+                "data": [ 500, 2000, 100 ],
                 "dists": [],
                 "envlp": [ {}, {}, {}, {}, {} ],
                 "children": null
               },
               {
                 "id": 9,
-                "contribs": [
-                  1,
-                  [ [ 3, 100, true ] ]
-                ],
-                "data": [ 300, 800, 100 ],
+                "contribs": [ [ 3, 100, true ] ],
+                "data": [ 900, 2000, 100 ],
                 "dists": [],
                 "envlp": [ {}, {}, {}, {}, {} ],
                 "children": null
@@ -53,21 +42,15 @@
           },
           {
             "id": 8,
-            "contribs": [
-              1,
-              [ [ 1, 100, true ] ]
-            ],
-            "data": [ 200, 700, 100 ],
+            "contribs": [ [ 1, 100, true ] ],
+            "data": [ 800, 2000, 100 ],
             "dists": [],
             "envlp": [ {}, {}, {}, {}, {} ],
             "children": [
               {
                 "id": 13,
-                "contribs": [
-                  1,
-                  [ [ 8, 100, true ] ]
-                ],
-                "data": [ 300, 800, 100 ],
+                "contribs": [ [ 8, 100, true ] ],
+                "data": [ 1300, 2000, 100 ],
                 "dists": [],
                 "envlp": [ {}, {}, {}, {}, {} ],
                 "children": null
@@ -78,64 +61,46 @@
       },
       {
         "id": 2,
-        "contribs": [
-          1,
-          [ [ 0, 100, true ] ]
-        ],
-        "data": [ 100, 600, 100 ],
+        "contribs": [ [ 0, 100, true ] ],
+        "data": [ 200, 2000, 100 ],
         "dists": [],
         "envlp": [ {}, {}, {}, {}, {} ],
         "children": [
           {
             "id": 4,
-            "contribs": [
-              1,
-              [ [ 2, 100, true ] ]
-            ],
-            "data": [ 300, 800, 100 ],
+            "contribs": [ [ 2, 100, true ] ],
+            "data": [ 400, 2000, 100 ],
             "dists": [],
             "envlp": [ {}, {}, {}, {}, {} ],
             "children": null 
           },
           {
             "id": 6,
-            "contribs": [
-              1,
-              [ [ 2, 100, true ] ]
-            ],
-            "data": [ 300, 800, 100 ],
+            "contribs": [ [ 2, 100, true ] ],
+            "data": [ 600, 2000, 100 ],
             "dists": [],
             "envlp": [ {}, {}, {}, {}, {} ],
             "children": null 
           },
           {
             "id": 7,
-            "contribs": [
-              1,
-              [ [ 2, 100, true ] ]
-            ],
-            "data": [ 300, 800, 100 ],
+            "contribs": [ [ 2, 100, true ] ],
+            "data": [ 700, 2000, 100 ],
             "dists": [],
             "envlp": [ {}, {}, {}, {}, {} ],
             "children": [
               {
                 "id": 10,
-                "contribs": [
-                  1,
-                  [ [ 7, 100, true ] ]
-                ],
-                "data": [ 300, 800, 100 ],
+                "contribs": [ [ 7, 100, true ] ],
+                "data": [ 1000, 2000, 100 ],
                 "dists": [],
                 "envlp": [ {}, {}, {}, {}, {} ],
                 "children": null
               },
               {
                 "id": 12,
-                "contribs": [
-                  1,
-                  [ [ 7, 100, true ] ]
-                ],
-                "data": [ 300, 800, 100 ],
+                "contribs": [ [ 7, 100, true ] ],
+                "data": [ 1200, 2000, 100 ],
                 "dists": [],
                 "envlp": [ {}, {}, {}, {}, {} ],
                 "children": null
@@ -144,21 +109,21 @@
           },
           {
             "id": 11,
-            "contribs": [
-              1,
-              [ [ 2, 100, true ] ]
+            "contribs": [ 
+              [ 2, 100, true ],
+              [ 14, 20, false ],
+              [ 7, 10, true ],
+              [ 10, 10, true ],
+              [ 13, 5, true ]
             ],
-            "data": [ 200, 700, 100 ],
+            "data": [ 1100, 2000, 100 ],
             "dists": [],
             "envlp": [ {}, {}, {}, {}, {} ],
             "children": [
               {
                 "id": 14,
-                "contribs": [
-                  1,
-                  [ [ 11, 100, true ] ]
-                ],
-                "data": [ 300, 800, 100 ],
+                "contribs": [ [ 11, 100, true ] ],
+                "data": [ 1400, 2000, 100 ],
                 "dists": [],
                 "envlp": [ {}, {}, {}, {}, {} ],
                 "children": null

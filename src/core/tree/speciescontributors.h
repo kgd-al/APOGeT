@@ -104,11 +104,11 @@ struct Contribution {
 ///   - B is not a node in A's subtree (including itself)
 ///   - B is not younger than A (in terms of first appearance)
 class Contributors {
-  /// The buffer containing the individual contributions
-  std::vector<Contributor> vec;
-
   /// The associated node identificator
   SID nodeID;
+
+  /// The buffer containing the individual contributions
+  std::vector<Contributor> vec;
 
 public:
   /// Alias for the data structure containing the contributing SIDs
@@ -122,11 +122,19 @@ public:
   Contributors (void) : Contributors(SID::INVALID) {}
 
   /// Constructor. Registers the node whose contributor collection it manages
-  Contributors (SID id) : nodeID(id) {}
+  Contributors (SID id) : Contributors(id, {}) {}
+
+  /// Contructor. Builds from external data
+  Contributors (SID id, decltype(vec) &&v) : nodeID(id), vec(v) {}
 
   /// \return The id of the monitored node
   SID getNodeID (void) const {
     return nodeID;
+  }
+
+  /// \return Read-only accessor to the internal data
+  const auto& data (void) const {
+    return vec;
   }
 
   /// Register new contributions, updates internal data and returns the new
@@ -151,12 +159,6 @@ public:
   const auto end (void) const {
     return vec.end();
   }
-
-  /// Serialize Contributors \p c into a json
-  friend void to_json (json &j, const Contributors &c);
-
-  /// Deserialize Contributors \p c from json \p j
-  friend void from_json (const json &j, Contributors &c);
 
   /// Stream Contributors \p c to \p os
   friend std::ostream& operator<< (std::ostream &os, const Contributors &c);

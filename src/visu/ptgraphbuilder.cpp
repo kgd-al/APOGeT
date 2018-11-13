@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <qmath.h>
 
+#include "phylogenyviewer.h"
 #include "ptgraphbuilder.h"
 #include "graphicutils.h"
 
@@ -43,16 +44,8 @@ static constexpr int BOUNDS_LEVEL = -20;
 static constexpr float PATH_WIDTH = 2.5;
 
 static constexpr Qt::GlobalColor PATH_DEFAULT_COLOR = Qt::darkGray;
-static constexpr Qt::GlobalColor PATH_HIGHLIGHT_COLOR = Qt::red;
-
-static const QPen BASE_PEN (PATH_DEFAULT_COLOR, PATH_WIDTH,
-                            Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-
-static const QPen HIGH_PEN = [] {
-  QPen p = BASE_PEN;
-  p.setColor(PATH_HIGHLIGHT_COLOR);
-  return p;
-}();
+static constexpr Qt::GlobalColor PATH_SURVIVOR_COLOR = Qt::red;
+static constexpr Qt::GlobalColor PATH_CONTRIBUTOR_COLOR = Qt::green;
 
 
 // ============================================================================
@@ -103,7 +96,7 @@ struct PolarCoordinates {
 
 
 // ============================================================================
-// == Graph node
+// == Utilities
 // ============================================================================
 
 QPainterPath makeArc (const QPointF &p0, const QPointF &p1) {
@@ -150,7 +143,7 @@ void Node::updateTooltip (void) {
 }
 
 void Node::autoscale(void) {
-  setScale(fullness());
+  setScale(fullness() * PTGraphBuilder::nodeWidth(treeBase->radius()));
   updateTooltip();
   update();
 }
@@ -185,12 +178,22 @@ void Node::updateNode (bool alive) {
 
   timeline->invalidatePath();
   updateTooltip();
+  autoscale();
 }
 
 void Node::setOnSurvivorPath (bool osp) {
   bool s = _onSurvivorPath = osp;
   setZValue(s ? NODE_SURVIVOR_LEVEL : NODE_EXCTINCT_LEVEL);
   if (path) path->setZValue(PATHS_LEVEL + s);
+}
+
+void Node::hoverEnterEvent(QGraphicsSceneHoverEvent*) {
+  treeBase->hoverEvent(id, true);
+}
+
+/// Triggers a callback when this species node is no longer hovered
+void Node::hoverLeaveEvent(QGraphicsSceneHoverEvent*) {
+  treeBase->hoverEvent(id, false);
 }
 
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
@@ -211,8 +214,10 @@ void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) 
 // == Path between a parent and child node
 // ============================================================================
 
-Path::Path(Node *start, Node *end) : _start(start), _end(end) {
+Path::Path(Node *start, Node *end) : start(start), end(end) {
   setZValue(PATHS_LEVEL);
+  assert(start && end);
+  assert(start->treeBase == end->treeBase);
 }
 
 void Path::invalidatePath(void) {
@@ -221,7 +226,7 @@ void Path::invalidatePath(void) {
   _shape = QPainterPath();
   _shape.setFillRule(Qt::WindingFill);
 
-  _shape.addPath(makeArc(_start->scenePos(), _end->scenePos()));
+  _shape.addPath(makeArc(start->scenePos(), end->scenePos()));
   _shape.addEllipse(_shape.pointAtPercent(1), END_POINT_SIZE, END_POINT_SIZE);
 }
 
@@ -233,7 +238,9 @@ QRectF Path::boundingRect() const {
 }
 
 void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
-  painter->setPen(_end->onSurvivorPath() ? HIGH_PEN : BASE_PEN);
+  painter->setPen(start->treeBase->pathPen(
+                    end->onSurvivorPath() ? details::PATH_SURVIVOR
+                                          : details::PATH_BASE));
   painter->drawPath(_shape);
 }
 
@@ -242,60 +249,61 @@ void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
 // == Timeline for a node
 // ============================================================================
 
-Timeline::Timeline(Node *node) : _node(node) {
+Timeline::Timeline(Node *node) : node(node) {
   setZValue(TIMELINES_LEVEL);
 }
 
 void Timeline::invalidatePath(void) {
   prepareGeometryChange();
 
-  _points[0] = _node->scenePos();
-  double a = PolarCoordinates::primaryAngle(_points[0]);
+  points[0] = node->scenePos();
+  double a = PolarCoordinates::primaryAngle(points[0]);
 
-  _points[2] = _node->data.lastAppearance * QPointF(cos(a), sin(a));
+  points[2] = node->data.lastAppearance * QPointF(cos(a), sin(a));
 
-  if (_node->alive()) // Survivor timeline goes all the way
-    _points[1] = _points[2];
+  if (node->alive()) // Survivor timeline goes all the way
+    points[1] = points[2];
 
-  else if (!_node->onSurvivorPath())  // No survivor part for this path
-    _points[1] = _points[0];
+  else if (!node->onSurvivorPath())  // No survivor part for this path
+    points[1] = points[0];
 
   else {
     // Compute location of last child survivor
-    double l = _node->data.firstAppearance;
-    for (const Node *gn: _node->subnodes) {
+    double l = node->data.firstAppearance;
+    for (const Node *gn: node->subnodes) {
       if (!gn->onSurvivorPath())  continue;
 
       double l_ = gn->data.firstAppearance;
       if (l < l_) l = l_;
     }
 
-    _points[1] = l * QPointF(cos(a), sin(a));
+    points[1] = l * QPointF(cos(a), sin(a));
   }
 }
 
 QPainterPath Timeline::shape (void) const {
-  QPainterPath path;
-  path.moveTo(_points[0]);
-  path.lineTo(_points[1]);
-  path.lineTo(_points[2]);
-  path.addEllipse(_points[2], END_POINT_SIZE, END_POINT_SIZE);
-  return QPainterPathStroker (BASE_PEN).createStroke(path);
+//  QPainterPath path;
+//  path.moveTo(points[0]);
+//  path.lineTo(points[1]);
+//  path.lineTo(points[2]);
+//  path.addEllipse(points[2], END_POINT_SIZE, END_POINT_SIZE);
+//  return QPainterPathStroker (BASE_PEN).createStroke(path);
+  return QPainterPath();
 }
 
 void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
-  if (_points[0] != _points[1]) {
-    painter->setPen(HIGH_PEN);
-    painter->drawLine(_points[0], _points[1]);
+  if (points[0] != points[1]) {
+    painter->setPen(node->treeBase->pathPen(details::PATH_SURVIVOR));
+    painter->drawLine(points[0], points[1]);
   }
 
-  if (_points[1] != _points[2]) {
-    painter->setPen(BASE_PEN);
-    painter->drawLine(_points[1], _points[2]);
+  if (points[1] != points[2]) {
+    painter->setPen(node->treeBase->pathPen(details::PATH_BASE));
+    painter->drawLine(points[1], points[2]);
   }
 
   painter->setBrush(painter->pen().color());
-  painter->drawEllipse(_points[2], END_POINT_SIZE, END_POINT_SIZE);
+  painter->drawEllipse(points[2], END_POINT_SIZE, END_POINT_SIZE);
 }
 
 
@@ -384,7 +392,7 @@ void Contributors::paint (QPainter *painter,
 // ============================================================================
 
 Border::Border (double height)
-  : height(height),
+  : radius(height),
     pen(Qt::gray, 1, Qt::DashLine),
     font("Courrier", 20),
     metrics(font) {
@@ -405,14 +413,14 @@ void Border::updateShape(void) {
     shape.addText(-bounds.center(), font, msg);
 
   } else {
-    QPointF p = height * QPointF(cos(LEGEND_PHASE), sin(LEGEND_PHASE));
+    QPointF p = radius * QPointF(cos(LEGEND_PHASE), sin(LEGEND_PHASE));
 
     shape.moveTo(0,0);
     shape.lineTo(p);
 
     for (uint i=1; i<=LEGEND_TICKS; i++) {
       double v = double(i) / LEGEND_TICKS;
-      double h = height * v;
+      double h = radius * v;
       shape.addEllipse({0,0}, h, h);
 
       legend << QPair(i, v * p);
@@ -420,11 +428,33 @@ void Border::updateShape(void) {
   }
 }
 
+void format (float &n, float &d, float e) {
+  float n_ = std::floor(n / e);
+  d = 10 * (n - e * n_) / e;
+  n = n_;
+}
+
+QString prettyNumber (float n) {
+  if (n < 1e3)        return QString::number(n);
+  else if (n > 1e12)  return QString::number(n, 'e', 3);
+
+  float d = 0;
+  QString u = "";
+  if (n < 1e6)        format(n, d, 1e3), u = "K";
+  else if (n < 1e9)   format(n, d, 1e6), u = "M";
+  else if (n < 1e12)  format(n, d, 1e9), u = "G";
+
+  QString res = QString::number(n) + u;
+  if (d > 0)  res += QString::number(d);
+  return res;
+}
+
+/// \todo Stops working above 2'000'000
 void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
   painter->setPen(pen);
   painter->setBrush(Qt::white);
 
-  float factor = height / 50;
+  float factor = radius / 50;
   float f = std::max(1.f, factor);
   font.setPointSizeF(f);
 
@@ -432,15 +462,15 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
   painter->setFont(font);
 
   if (!config::PTree::winningPathOnly()) {
-    if (height > 0) {
+    if (radius > 0) {
       QList<QPair<QRectF, QString>> texts;
-      QRegion clip (-height, -height, 2*height, 2*height);
+      QRegion clip (-radius, -radius, 2*radius, 2*radius);
 
       // Compute legend values and clip-out text areas
       for (auto &p: legend) {
         double v = p.first / double(LEGEND_TICKS);
-        double h = height * v;
-        QString text = QString::number(h);
+        double h = radius * v;
+        QString text = prettyNumber(h);
         QRectF textRect = QRectF(metrics.boundingRect(text)).translated(p.second);
         textRect.translate(-.5*textRect.width(), .5*textRect.height() - metrics.descent());
         clip = clip.subtracted(QRegion(textRect.toAlignedRect()));
@@ -453,7 +483,7 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
       for (auto it=legend.rbegin(); it!=legend.rend(); ++it) {
         const auto &p  = *it;
         double v = p.first / double(LEGEND_TICKS);
-        double h = height * v;
+        double h = radius * v;
 
         QRectF rect (-h, -h, 2*h, 2*h);
 
@@ -485,6 +515,32 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
 // ============================================================================
 // == Graph builder
 // ============================================================================
+
+decltype(GUIItems::pens) PTGraphBuilder::buildPenSet (void) {
+  decltype(GUIItems::pens) map;
+
+  QPen base (PATH_DEFAULT_COLOR, PATH_WIDTH,
+             Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+
+  QPen survivor = base;
+  survivor.setColor(PATH_SURVIVOR_COLOR);
+
+  QPen contributor = base;
+  contributor.setColor(PATH_CONTRIBUTOR_COLOR);
+
+  map[details::PATH_BASE] = base;
+  map[details::PATH_SURVIVOR] = survivor;
+  map[details::PATH_CONTRIBUTOR] = contributor;
+  return map;
+}
+
+float PTGraphBuilder::nodeWidth(float radius) {
+  return radius / (NODE_SIZE * 20);
+}
+
+float PTGraphBuilder::pathWidth(float radius) {
+  return radius / (PATH_WIDTH * 200);
+}
 
 void PTGraphBuilder::updateLayout (Node *localRoot, PolarCoordinates &pc) {
   if (localRoot->subtreeVisible()) {

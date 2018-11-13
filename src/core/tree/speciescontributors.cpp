@@ -89,18 +89,6 @@ SID Contributors::updateElligibilities(const ValidityEvaluator &elligible) {
   return currentMain();
 }
 
-/// Serialize Contributors \p c into a json
-void to_json (json &j, const Contributors &c) {
-  j = {c.nodeID, c.vec};
-}
-
-/// Deserialize Contributors \p c from json \p j
-void from_json (const json &j, Contributors &c) {
-  uint i=0;
-  c.nodeID = j[i++];
-  c.vec = j[i++].get<decltype(Contributors::vec)>();
-}
-
 std::ostream& operator<< (std::ostream &os, const Contributors &c) {
   os << "[ ";
   for (const Contributor &nc: c.vec)

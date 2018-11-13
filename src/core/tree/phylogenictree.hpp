@@ -655,7 +655,7 @@ private:
   /// Rebuilds PTree hierarchy and internal structure based on the contents of
   /// json \p j
   Node_ptr rebuildHierarchy(const json &j) {
-    Contributors c = j["contribs"];
+    Contributors c (j["id"], j["contribs"]);
     Node_ptr n = Node::make_shared(c);
 
     _nodes.push_back(n);
@@ -689,7 +689,7 @@ public:
     j["id"] = n.id();
     j["data"] = n.data;
     j["envlp"] = n.enveloppe;
-    j["contribs"] = n.contributors;
+    j["contribs"] = n.contributors.data();
     j["dists"] = jd;
     j["children"] = jc;
 
@@ -698,12 +698,12 @@ public:
 
   /// Serialise PTree \p pt into a json
   friend void to_json (json &j, const PhylogenicTree &pt) {
-    j = {pt._step, toJson(*pt._root)};
+    j = {"phylogenic tree", pt._step, toJson(*pt._root)};
   }
 
   /// Deserialise PTree \p pt from json \p j
   friend void from_json (const json &j, PhylogenicTree &pt) {
-    uint i=0;
+    uint i=1;
     pt._step = j[i++];
     pt._root = pt.rebuildHierarchy(j[i++]);
 

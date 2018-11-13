@@ -18,20 +18,19 @@ struct ViewerConfig {
 
 /// \cond internal
 
+struct PhylogenyViewer_base;
+using VTree = PhylogenyViewer_base *const;
+
 struct GUIItems;
 
 /// Cache structure used while building the PTree graph
 struct PTreeBuildingCache {
+  VTree tree;  ///< The tree being built
+
   const ViewerConfig &config; ///< The configuration data
   const uint time;  ///< The current timestamp
 
   GUIItems &items;  ///< The graphics items cache data
-
-  /// Callback type for managing node hovering events
-  using HoverCallback = std::function<void(phylogeny::SID, bool)>;
-
-  /// Callback for managing node hovering events
-  HoverCallback hoverCallback;
 };
 
 struct PolarCoordinates;
@@ -63,6 +62,9 @@ public:
   /// Helper alias to the species identificator
   using SID = phylogeny::SID;
 
+  /// The tree owning this node
+  PhylogenyViewer_base *const treeBase;
+
   const SID id;  ///< The identificator of the associated species node
   Node *parent;   ///< The parent node (if any)
 
@@ -80,15 +82,12 @@ public:
   /// The graphic items corresponding to the associated species 'children'
   QVector<Node*> subnodes;
 
-  /// The callback function managing the callback events
-  const PTreeBuildingCache::HoverCallback hoverCallback;
-
   /// Build a graphic node out of a potential parent and PTree data
-  template <typename PN, typename HC>
-  Node (Node *parent, const PN &n, HC hoverCallback)
-    : id(n.id()), parent(parent), data(n.data),
+  template <typename PN>
+  Node (VTree tree, Node *parent, const PN &n)
+    : treeBase(tree), id(n.id()), parent(parent), data(n.data),
       sid(QString::number(std::underlying_type<SID>::type(id))),
-      path(nullptr), timeline(nullptr), hoverCallback(hoverCallback) {
+      path(nullptr), timeline(nullptr) {
 
     enveloppe = n.enveloppe.size();
     children = n.children().size();
@@ -159,14 +158,10 @@ public:
   }
 
   /// Triggers a callback when this species node is hovered
-  void hoverEnterEvent(QGraphicsSceneHoverEvent*) override {
-    hoverCallback(id, true);
-  }
+  void hoverEnterEvent(QGraphicsSceneHoverEvent*) override;
 
   /// Triggers a callback when this species node is no longer hovered
-  void hoverLeaveEvent(QGraphicsSceneHoverEvent*) override {
-    hoverCallback(id, false);
-  }
+  void hoverLeaveEvent(QGraphicsSceneHoverEvent*) override;
 
   /// \returns this graphics item bounding box
   QRectF boundingRect(void) const override;
@@ -178,8 +173,8 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(Node::Visibilities)
 
 /// Graphics item connecting a child Node to its parent's timeline
 struct Path : public QGraphicsItem {
-  Node *_start; ///< The source Node (parent)
-  Node *_end;   ///< The target Node (child)
+  Node *start;  ///< The source Node (parent)
+  Node *end;    ///< The target Node (child)
 
   /// The shape used to paint this path
   QPainterPath _shape;
@@ -204,13 +199,13 @@ struct Path : public QGraphicsItem {
 
 /// Graphics item representing a Node lifespan
 struct Timeline : public QGraphicsItem {
-  Node *_node;  ///< The parent node
+  Node *node; ///< The parent node
 
   /// The point collection describing the path and survivor state
   ///  - 0: parent node position
   ///  - 1: position at which last seen alive (parent node or a descendant)
   ///  - 2: end-of-life position
-  QPointF _points[3];
+  QPointF points[3];
 
   /// Create a timeline associated with \p node
   Timeline(Node *node);
@@ -281,7 +276,7 @@ struct Contributors : public QGraphicsItem {
 /// Graphics item managing the graph's boundaries and legend
 struct Border : public QGraphicsItem {
   bool empty; ///< Whether or not any data was inputed in the associated graph
-  double height;  ///< How many timesteps are registered in the associated ptree
+  double radius;  ///< How many timesteps are registered in the associated ptree
   QPainterPath shape; ///< The legend axis
   QList<QPair<int, QPointF>> legend;  ///< The legend values
 
@@ -290,7 +285,7 @@ struct Border : public QGraphicsItem {
   QFontMetrics metrics; ///< Used to compute the size of the legend text
 
   /// Create border graphics item with given initial height
-  Border (double height);
+  Border (double radius);
 
   /// Set whether or not this item has data to display
   void setEmpty (bool empty) {
@@ -303,8 +298,8 @@ struct Border : public QGraphicsItem {
   }
 
   /// Set current height (i.e. number of timesteps in the associated ptree)
-  void setHeight (double h) {
-    height = h;
+  void setRadius (double r) {
+    radius = r;
     updateShape();
     update();
   }
@@ -321,6 +316,17 @@ struct Border : public QGraphicsItem {
   void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*);
 };
 
+namespace details {
+/// \cond internal
+/// The set of pen available for painting
+enum PenType {
+  PATH_BASE, ///< Default pen
+  PATH_SURVIVOR, ///< Paths leading to survivor species stand out
+  PATH_CONTRIBUTOR ///< Paths leading to a species' contributor
+};
+/// \endcond
+}
+
 /// Cache structure for easy management of the graph's various components
 struct GUIItems {
   QGraphicsScene *scene;  ///< Root of all the graphics items
@@ -331,6 +337,8 @@ struct GUIItems {
   Contributors *contributors;
 
   QMap<Node::SID, Node*> nodes;  ///< Lookup table for the graphics nodes
+
+  QMap<details::PenType, QPen> pens;  ///< Collection of pens
 };
 
 /// Helper structure managing the construction of a PTree's associated graph
@@ -343,18 +351,27 @@ struct PTGraphBuilder {
   /// Helper alias for the coordinate type
   using Coordinates = PolarCoordinates;
 
+  /// Builds the pen set used for drawing stuff
+  /// (precise, concise documentation is key)
+  static decltype(GUIItems::pens) buildPenSet (void);
+
+  /// \returns the appropriate width for a node drawn in a tree of radius
+  static float nodeWidth (float radius);
+
+  /// \returns the appropriate width for a path drawn in a tree of radius
+  static float pathWidth (float radius);
+
   /// Parse the \p pt PTree and build the associated graph complete with nodes,
   /// paths and legend
   template <typename GENOME>
   static void fillScene (const phylogeny::PhylogenicTree<GENOME> &pt, Cache &cache) {
-    if (auto root = pt.root())
-      addSpecies(nullptr, *root, cache);
-
     cache.items.border = new Border(cache.time);
     cache.items.scene->addItem(cache.items.border);
 
+    if (auto root = pt.root())
+      addSpecies(nullptr, *root, cache);
+
     cache.items.border->setEmpty(!bool(pt.root()));
-    cache.items.border->setHeight(pt.step());
 
     cache.items.contributors = new Contributors(cache.items.border);
     cache.items.scene->addItem(cache.items.contributors);
@@ -366,7 +383,7 @@ struct PTGraphBuilder {
   template <typename PN>
   static void addSpecies(Node *parent, const PN &n, Cache &cache) {
     // Create node
-    Node *gn = new Node (parent, n, cache.hoverCallback);
+    Node *gn = new Node (cache.tree, parent, n);
 
     // Update related cache values
     if (parent)

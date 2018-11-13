@@ -78,7 +78,10 @@ auto makeSlider (Qt::Orientation orientation, const QString label,
 
 void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) {
   // Create cache
-  _items = {new QGraphicsScene(this), nullptr, nullptr, nullptr, {}};
+  _items = {
+    new QGraphicsScene(this), nullptr, nullptr, nullptr, {},
+    PTGraphBuilder::buildPenSet()
+  };
 
   // Create view
   _view = new QGraphicsView(_items.scene, this);
@@ -207,13 +210,16 @@ void PhylogenyViewer_base::makeFit(bool autofit) {
   if (_config.autofit)  _view->fitInView(_items.scene->sceneRect(), Qt::KeepAspectRatio);
 }
 
+
 // ============================================================================
 // == Phylogeny update
 // ============================================================================
+
 void PhylogenyViewer_base::treeStepped (uint step, const LivingSet &living) {
-  for (Node *n: _items.nodes)
-    n->updateNode(living.find(n->id) != living.end());
-  _items.border->setHeight(step);
+  updatePens();
+
+  for (Node *n: _items.nodes) n->updateNode(living.find(n->id) != living.end());
+  _items.border->setRadius(step);
   _items.scene->setSceneRect(_items.border->boundingRect());
   makeFit(_config.autofit);
 }
@@ -230,6 +236,11 @@ void PhylogenyViewer_base::genomeLeavesEnveloppe (SID, GID) {}
 void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC) {
   assert(false);
 }
+
+
+// ============================================================================
+// == User requests
+// ============================================================================
 
 void PhylogenyViewer_base::renderTo (QString filename) {
   if (filename.isEmpty())
