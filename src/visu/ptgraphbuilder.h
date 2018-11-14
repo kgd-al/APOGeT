@@ -231,14 +231,22 @@ struct Contributors : public QGraphicsItem {
   /// Helper alias to the species identificator
   using SID = phylogeny::SID;
 
+  VTree tree; ///< The tree whose contributions this draws
+
   /// Identificator of a path between two nodes
   struct PathID {
-    Node *from; ///< Source node
-    Node *to;   ///< Destination node
+    QPointF from; ///< Source
+    QPointF to;   ///< Destination
+
+    /// Compare two points in lexicographic order
+    static bool lower (const QPointF &lhs, const QPointF &rhs) {
+      return lhs.x() != rhs.x() ? lhs.x() < rhs.x() : lhs.y() < rhs.y();
+    }
 
     /// Compare two path identificators in lexicographic order
     friend bool operator< (const PathID &lhs, const PathID &rhs) {
-      return lhs.from != rhs.from ? lhs.from < rhs.from : lhs.to < rhs.to;
+      return lhs.from != rhs.from ?
+        lower(lhs.from, rhs.from) : lower(lhs.to, rhs.to);
     }
   };
 
@@ -246,16 +254,14 @@ struct Contributors : public QGraphicsItem {
   struct Path {
     QPainterPath path; ///< The Qt path
     float width;  ///< The path width
+
+    QColor debugcolor;
   };
 
   QMap<PathID, Path> paths;  ///< The paths connecting to the contributors
 
-  QPen pen; ///< The used to stroke the paths
-
-  QGraphicsItem *boundsProvider;  ///< The graphic item providing the paint area
-
   /// Builds a contributors drawer
-  Contributors (QGraphicsItem *bounds);
+  Contributors (VTree tree);
 
   /// Show the drawer for the provided node
   void show (SID sid, const GUIItems &items,
@@ -265,16 +271,15 @@ struct Contributors : public QGraphicsItem {
   void hide (void);
 
   /// \returns the same bounding rect as the graph's bounds
-  QRectF boundingRect(void) const {
-    return boundsProvider->boundingRect();
-  }
+  QRectF boundingRect(void) const override;
 
   /// Paints the paths to the various contributors
-  void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*);
+  void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
 };
 
 /// Graphics item managing the graph's boundaries and legend
 struct Border : public QGraphicsItem {
+  VTree tree; ///< The tree whose border it is drawing
   bool empty; ///< Whether or not any data was inputed in the associated graph
   double radius;  ///< How many timesteps are registered in the associated ptree
   QPainterPath shape; ///< The legend axis
@@ -285,7 +290,7 @@ struct Border : public QGraphicsItem {
   QFontMetrics metrics; ///< Used to compute the size of the legend text
 
   /// Create border graphics item with given initial height
-  Border (double radius);
+  Border (VTree tree, double radius);
 
   /// Set whether or not this item has data to display
   void setEmpty (bool empty) {
@@ -322,7 +327,8 @@ namespace details {
 enum PenType {
   PATH_BASE, ///< Default pen
   PATH_SURVIVOR, ///< Paths leading to survivor species stand out
-  PATH_CONTRIBUTOR ///< Paths leading to a species' contributor
+  PATH_CONTRIBUTOR, ///< Paths leading to a species' contributor
+  BORDER_AXIS,  ///< Major grid axis
 };
 /// \endcond
 }
@@ -351,21 +357,27 @@ struct PTGraphBuilder {
   /// Helper alias for the coordinate type
   using Coordinates = PolarCoordinates;
 
+  /// Helper alias for the pen collection
+  using PenSet = decltype(GUIItems::pens);
+
   /// Builds the pen set used for drawing stuff
   /// (precise, concise documentation is key)
-  static decltype(GUIItems::pens) buildPenSet (void);
+  static PenSet buildPenSet (void);
+
+  /// Updates pens to match the current state of the tree
+  static void updatePenSet (float radius, PenSet &pens);
 
   /// \returns the appropriate width for a node drawn in a tree of radius
   static float nodeWidth (float radius);
 
   /// \returns the appropriate width for a path drawn in a tree of radius
-  static float pathWidth (float radius);
+  static float pathWidth (float baseWidth, float radius);
 
   /// Parse the \p pt PTree and build the associated graph complete with nodes,
   /// paths and legend
   template <typename GENOME>
   static void fillScene (const phylogeny::PhylogenicTree<GENOME> &pt, Cache &cache) {
-    cache.items.border = new Border(cache.time);
+    cache.items.border = new Border(cache.tree, cache.time);
     cache.items.scene->addItem(cache.items.border);
 
     if (auto root = pt.root())
@@ -373,7 +385,7 @@ struct PTGraphBuilder {
 
     cache.items.border->setEmpty(!bool(pt.root()));
 
-    cache.items.contributors = new Contributors(cache.items.border);
+    cache.items.contributors = new Contributors(cache.tree);
     cache.items.scene->addItem(cache.items.contributors);
 
     cache.items.scene->setSceneRect(cache.items.border->boundingRect());

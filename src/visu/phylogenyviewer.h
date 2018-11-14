@@ -50,9 +50,14 @@ public:
   /// Intercepted to allow for tree autofitting
   void resizeEvent(QResizeEvent *event);
 
-  /// \returns the radius of the border
+  /// \returns the tree radius
   auto radius (void) const {
     return _items.border->radius;
+  }
+
+  /// \returns the tree bounding rectangle
+  auto boundingRect (void) const {
+    return _items.border->boundingRect();
   }
 
   /// \returns the pen of the requested type
@@ -150,10 +155,9 @@ protected:
   void constructorDelegate (uint steps,
                             Direction direction = Direction::LeftToRight);
 
-  /// Ensure pens are consistent witht the current state of the ptree
+  /// Ensure pens are consistent with the current state of the ptree
   void updatePens (void) {
-    float w = PTGraphBuilder::pathWidth(radius());
-    for (QPen& p: _items.pens) p.setWidthF(w);
+    PTGraphBuilder::updatePenSet(radius(), _items.pens);
   }
 
   /// Apply function \p f to all of the scene's current nodes

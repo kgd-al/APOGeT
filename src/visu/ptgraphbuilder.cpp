@@ -3,6 +3,9 @@
 #include <QPainter>
 #include <qmath.h>
 
+/// \todo remove
+#include <QDebug>
+
 #include "phylogenyviewer.h"
 #include "ptgraphbuilder.h"
 #include "graphicutils.h"
@@ -41,7 +44,8 @@ static constexpr int BOUNDS_LEVEL = -20;
 
 // == Paint style ===================================================
 
-static constexpr float PATH_WIDTH = 2.5;
+static constexpr float AXIS_WIDTH = 1;
+static constexpr float PATH_WIDTH = 1.5;
 
 static constexpr Qt::GlobalColor PATH_DEFAULT_COLOR = Qt::darkGray;
 static constexpr Qt::GlobalColor PATH_SURVIVOR_COLOR = Qt::red;
@@ -311,15 +315,18 @@ void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidge
 // == Species contributions drawer
 // ============================================================================
 
-Contributors::Contributors (QGraphicsItem *bounds) : boundsProvider(bounds) {
+Contributors::Contributors (VTree tree) : tree(tree) {
   setZValue(CONTRIBUTORS_LEVEL);
-  pen.setColor(Qt::green);
+}
+
+QRectF Contributors::boundingRect(void) const {
+  return tree->boundingRect();
 }
 
 void Contributors::show (SID sid, const GUIItems &items,
                          const phylogeny::Contributors &contribs) {
 
-  std::cerr << "Overlaying" << std::endl;
+  qDebug() << "Overlaying";
 
   // Retrieve graphic item of given species
   Node *n = items.nodes.value(sid);
@@ -337,34 +344,99 @@ void Contributors::show (SID sid, const GUIItems &items,
   for (auto &c: contribs)
     if (c.speciesID() != sid)  totalWidth += c.count();
 
+  auto pathId = [] (const QPainterPath &p) {
+    return PathID{p.pointAtPercent(0), p.pointAtPercent(1)};
+  };
+
+  // add or update path
+  auto aouPath = [this, pathId] (const QPainterPath &p, float w, QColor c) {
+    auto id = pathId(p);
+    auto pit = paths.find(id);
+    if (pit == paths.end())
+      paths.insert(id, {p, w, c});
+    else
+      pit.value().width += w;
+  };
+
+  auto makePathSection =
+    [aouPath] (int i, QPainterPath &path, Node *n, float w, bool vertical) {
+    // Add horizontal path
+    path = QPainterPath();
+    path.addPath(makeArc(n->parent->scenePos(), n->scenePos()));
+    aouPath(path, w, QColor::fromRgb(i * 255, 255, (1- i) * 255));
+
+    qDebug().nospace()
+      << "\t\tline h" << i << " (" << path.pointAtPercent(0)
+             << ", " << path.pointAtPercent(1) << ")";
+
+    if (vertical) {
+      // Add vertical path
+      /// FIXME (in progress)
+
+      // Find node in parent's list
+      {
+        QDebug q = qDebug();
+        q << "\t\tvertical subpaths:";
+
+        for (int ni = n->parent->subnodes.indexOf(n);
+             ni >= 0; --ni) {
+          q << ni;
+        }
+      }
+
+      QPointF vp = path.pointAtPercent(1);
+      path = QPainterPath();
+      path.moveTo(vp);
+      path.lineTo(n->parent->scenePos());
+      aouPath(path, w, QColor::fromRgb(i * 125, 255, (1-i) * 125));
+
+      qDebug().nospace()
+        << "\t\tline v" << i << " ("
+               << path.pointAtPercent(0) << ", "
+               << path.pointAtPercent(1) << ")";
+    }
+  };
+
   paths.clear();
   for (auto &c: contribs) {
     float w = c.count() / totalWidth;
     Node *nc = items.nodes.value(c.speciesID());
-    std::cerr << "\tnode " << c.speciesID() << " drawn by " << nc
-              << " with width " << w << std::endl;
+    qDebug() << "\tnode " << uint(c.speciesID()) << " drawn by " << nc
+             << " with width " << w;
 
+    // Find path from contributor to common ancestor
     Node *p = nc;
+    QPainterPath pp0 (nc->scenePos());
     auto it = std::find(np.begin(), np.end(), p);
-    while (it == np.end()) {
-      PathID pid { p, *it };
-      auto pit = paths.find(pid);
-      if (pit == paths.end()) {
-        QPainterPath pp;
-        pp.addPath(makeArc(p->parent->scenePos(), p->scenePos()));
-        paths.insert(pid, {pp, w});
-
-      } else
-        pit.value().width += w;
-
+    while (it == np.end()) {  // Common ancestor not found
+      it = std::find(np.begin(), np.end(), p->parent);
+      makePathSection(0, pp0, p, w, it == np.end());
       p = p->parent;
       assert(p);
-
-      it = std::find(np.begin(), np.end(), p);
     }
+
+    Node *commonAncestor = p;
+    qDebug() << "\tCommon ancestor of" << uint(n->id) << "and" << uint(nc->id)
+             << "is: " << uint(commonAncestor->id);
+
+    // Find path from node to common ancestor
+    p = n;
+    QPainterPath pp1 (n->scenePos());
+    while (p != commonAncestor) {
+      makePathSection(1, pp1, p, w, it == np.end());
+      p = p->parent;
+      assert(p);
+    }
+
+    // Connect paths
+    QPainterPath pp2;
+    pp2.moveTo(pp0.pointAtPercent(1));
+    pp2.lineTo(pp1.pointAtPercent(1));
+    qDebug() << "\t\tline2(" << pp2.pointAtPercent(0) << "," << pp2.pointAtPercent(1) << ")";
+    aouPath(pp2, w, QColor::fromRgb(0, 255, 0));
   }
 
-  std::cerr << std::endl;
+  qDebug() << "\n";
 
   QGraphicsItem::show();
   update();
@@ -378,9 +450,13 @@ void Contributors::hide (void) {
 void Contributors::paint (QPainter *painter,
                           const QStyleOptionGraphicsItem*, QWidget*) {
 
+  QPen pen = tree->pathPen(details::PATH_CONTRIBUTOR);
+  float w = pen.widthF();
+
   painter->save();
   for (const Path &p: paths) {
-    pen.setWidthF(PATH_WIDTH * (1 + p.width));
+    pen.setWidthF(w * (1 + p.width));
+    pen.setColor(p.debugcolor);
     painter->setPen(pen);
     painter->drawPath(p.path);
   }
@@ -391,8 +467,8 @@ void Contributors::paint (QPainter *painter,
 // == Graph borders and legends
 // ============================================================================
 
-Border::Border (double height)
-  : radius(height),
+Border::Border (VTree tree, double height)
+  : tree(tree), radius(height),
     pen(Qt::gray, 1, Qt::DashLine),
     font("Courrier", 20),
     metrics(font) {
@@ -445,13 +521,13 @@ QString prettyNumber (float n) {
   else if (n < 1e12)  format(n, d, 1e9), u = "G";
 
   QString res = QString::number(n) + u;
-  if (d > 0)  res += QString::number(d);
+  if (d > 0)  res += " " + QString::number(d);
   return res;
 }
 
 /// \todo Stops working above 2'000'000
 void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
-  painter->setPen(pen);
+  painter->setPen(tree->pathPen(details::BORDER_AXIS));
   painter->setBrush(Qt::white);
 
   float factor = radius / 50;
@@ -516,8 +592,8 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
 // == Graph builder
 // ============================================================================
 
-decltype(GUIItems::pens) PTGraphBuilder::buildPenSet (void) {
-  decltype(GUIItems::pens) map;
+PTGraphBuilder::PenSet PTGraphBuilder::buildPenSet (void) {
+  PenSet map;
 
   QPen base (PATH_DEFAULT_COLOR, PATH_WIDTH,
              Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
@@ -528,18 +604,28 @@ decltype(GUIItems::pens) PTGraphBuilder::buildPenSet (void) {
   QPen contributor = base;
   contributor.setColor(PATH_CONTRIBUTOR_COLOR);
 
+  QPen border (Qt::gray, 1, Qt::DashLine);
+
   map[details::PATH_BASE] = base;
   map[details::PATH_SURVIVOR] = survivor;
   map[details::PATH_CONTRIBUTOR] = contributor;
+  map[details::BORDER_AXIS] = border;
   return map;
+}
+
+void PTGraphBuilder::updatePenSet(float radius, PenSet &pens) {
+  pens[details::PATH_BASE].setWidthF(pathWidth(PATH_WIDTH, radius));
+  pens[details::PATH_SURVIVOR].setWidthF(pens[details::PATH_BASE].widthF());
+  pens[details::PATH_CONTRIBUTOR].setWidthF(2.*pens[details::PATH_BASE].widthF());
+  pens[details::BORDER_AXIS].setWidthF(pathWidth(AXIS_WIDTH, radius));
 }
 
 float PTGraphBuilder::nodeWidth(float radius) {
   return radius / (NODE_SIZE * 20);
 }
 
-float PTGraphBuilder::pathWidth(float radius) {
-  return radius / (PATH_WIDTH * 200);
+float PTGraphBuilder::pathWidth(float baseWidth, float radius) {
+  return baseWidth * radius / 400.;
 }
 
 void PTGraphBuilder::updateLayout (Node *localRoot, PolarCoordinates &pc) {
