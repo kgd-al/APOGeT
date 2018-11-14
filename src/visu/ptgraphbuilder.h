@@ -259,6 +259,7 @@ struct Contributors : public QGraphicsItem {
   };
 
   QMap<PathID, Path> paths;  ///< The paths connecting to the contributors
+  QVector<QPair<QPointF, QString>> labels;  ///< The labels for each contributor
 
   /// Builds a contributors drawer
   Contributors (VTree tree);
@@ -372,6 +373,9 @@ struct PTGraphBuilder {
 
   /// \returns the appropriate width for a path drawn in a tree of radius
   static float pathWidth (float baseWidth, float radius);
+
+  /// \returns the appropriate font size for a tree of radius
+  static float fontSize (float radius);
 
   /// Parse the \p pt PTree and build the associated graph complete with nodes,
   /// paths and legend

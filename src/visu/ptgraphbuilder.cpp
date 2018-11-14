@@ -1,6 +1,7 @@
 #include <QTextStream>
 
 #include <QPainter>
+#include <QToolTip>
 #include <qmath.h>
 
 /// \todo remove
@@ -81,6 +82,10 @@ struct PolarCoordinates {
     return sqrt(p.x()*p.x() + p.y()*p.y());
   }
 
+  static QPointF toCartesian (double a, double r) {
+    return r * QPointF(cos(a), sin(a));
+  }
+
   /// \returns the coordinate of node number \p i
   static float xCoord (uint i) {  return i * NODE_SIZE; }
 
@@ -94,7 +99,7 @@ struct PolarCoordinates {
     double a = phase;
     if (width > 0)  a += 2. * M_PI * xCoord(nextX++) / width;
   //  qDebug() << "theta(" << nextX-1 << "): " << a * 180. / M_PI;
-    return time * QPointF(cos(a), sin(a));
+    return toCartesian(a, time);
   }
 };
 
@@ -108,8 +113,6 @@ QPainterPath makeArc (const QPointF &p0, const QPointF &p1) {
   double a1 = PolarCoordinates::primaryAngle(p1);
   double r1 = PolarCoordinates::length(p1);
 
-  std::cerr << "Arc(" << a0 << ", " << a1 << ", " << r1 << ")" << std::endl;
-
   QPainterPath path;
   path.moveTo(p1);
   path.arcTo(QRect(-r1, -r1, 2*r1, 2*r1), -qRadiansToDegrees(a1),
@@ -117,6 +120,13 @@ QPainterPath makeArc (const QPointF &p0, const QPointF &p1) {
 
   return path;
 }
+
+QPointF timelineAnchor (const Node *n) {
+  return PolarCoordinates::toCartesian(
+    PolarCoordinates::primaryAngle(n->parent->scenePos()),
+    PolarCoordinates::length(n->scenePos()));
+}
+
 
 // ============================================================================
 // == Graph node
@@ -328,6 +338,8 @@ void Contributors::show (SID sid, const GUIItems &items,
 
   qDebug() << "Overlaying";
 
+  const float R = tree->radius();
+
   // Retrieve graphic item of given species
   Node *n = items.nodes.value(sid);
   assert(n->id == sid);
@@ -352,88 +364,134 @@ void Contributors::show (SID sid, const GUIItems &items,
   auto aouPath = [this, pathId] (const QPainterPath &p, float w, QColor c) {
     auto id = pathId(p);
     auto pit = paths.find(id);
-    if (pit == paths.end())
+    if (pit == paths.end()) {
       paths.insert(id, {p, w, c});
-    else
+      qDebug() << "\t\t\tinsert({" << id.from << id.to << "}: " << w;
+    } else {
       pit.value().width += w;
+      qDebug() << "\t\t\tupdate({" << id.from << id.to << "} = " << pit.value().width;
+    }
+  };
+
+  auto makeVerticalPathSection =
+      [aouPath] (int i, QPainterPath &path, Node *n0, Node *n1, float w) {
+
+    // Find node in parent's list
+    {
+      assert(!n1 || n0->parent == n1 || n0 == n1->parent || n0->parent == n1->parent);
+      Node *parent = nullptr;
+      if (!n1) parent = n0->parent;
+      else if (n0->parent == n1) parent = n1;
+      else if (n0 == n1->parent) parent = n0;
+      else  parent = n0->parent;
+
+      using T = QPair<uint,QPointF>;
+      const auto &nodes = parent->subnodes;
+
+      int ni0 = nodes.size()-1;
+      if (parent == n0->parent) ni0 = nodes.indexOf(n0);
+      assert(ni0 >= 0);
+
+      int ni1 = nodes.size()-1;
+      if (n1 && parent == n1->parent) ni1 = nodes.indexOf(n1);
+      assert(ni1 >= 0);
+
+      QVector<T> points;
+      int m = std::min(ni0, ni1), M = std::max(ni0, ni1);
+      qDebug() << "\tVerticals bars from" << m << "to" << M;
+      for (int ni = m; ni <= M; ni++)
+        points.append(T{uint(nodes[ni]->id), timelineAnchor(nodes[ni])});
+
+      if (!n1 || n0->parent != n1->parent)
+        points.append(T{uint(parent->id), parent->scenePos()});
+
+      for (int j=0; j<points.size()-1; j++) {
+        path = QPainterPath();
+        path.moveTo(points[j].second);
+        path.lineTo(points[j+1].second);
+
+        qDebug().nospace()
+          << "\t\tlv" << i << " [" << points[j].first
+          << "|" << points[j+1].first << "] ("
+          << path.pointAtPercent(0) << ", "
+          << path.pointAtPercent(1) << ")";
+
+        aouPath(path, w, QColor::fromRgb((i==1) * 125, 255, (i==0) * 125));
+      }
+    }
   };
 
   auto makePathSection =
-    [aouPath] (int i, QPainterPath &path, Node *n, float w, bool vertical) {
+      [aouPath, makeVerticalPathSection] (int i, QPainterPath &path, Node *n, float w, bool vertical) {
     // Add horizontal path
     path = QPainterPath();
     path.addPath(makeArc(n->parent->scenePos(), n->scenePos()));
     aouPath(path, w, QColor::fromRgb(i * 255, 255, (1- i) * 255));
 
     qDebug().nospace()
-      << "\t\tline h" << i << " (" << path.pointAtPercent(0)
-             << ", " << path.pointAtPercent(1) << ")";
+      << "\t\tlh" << i << " [" << uint(n->id) << "-] ("
+      << path.pointAtPercent(0)
+      << ", " << path.pointAtPercent(1) << ")";
 
-    if (vertical) {
-      // Add vertical path
-      /// FIXME (in progress)
-
-      // Find node in parent's list
-      {
-        QDebug q = qDebug();
-        q << "\t\tvertical subpaths:";
-
-        for (int ni = n->parent->subnodes.indexOf(n);
-             ni >= 0; --ni) {
-          q << ni;
-        }
-      }
-
-      QPointF vp = path.pointAtPercent(1);
-      path = QPainterPath();
-      path.moveTo(vp);
-      path.lineTo(n->parent->scenePos());
-      aouPath(path, w, QColor::fromRgb(i * 125, 255, (1-i) * 125));
-
-      qDebug().nospace()
-        << "\t\tline v" << i << " ("
-               << path.pointAtPercent(0) << ", "
-               << path.pointAtPercent(1) << ")";
-    }
+    if (vertical)
+      makeVerticalPathSection(i, path, n, nullptr, w);
   };
 
   paths.clear();
   for (auto &c: contribs) {
     float w = c.count() / totalWidth;
     Node *nc = items.nodes.value(c.speciesID());
-    qDebug() << "\tnode " << uint(c.speciesID()) << " drawn by " << nc
-             << " with width " << w;
+    qDebug() << "\tnode " << uint(c.speciesID()) << ", width " << w;
+
+    QPoint labelPos = nc->scenePos().toPoint();
+    labelPos.setX(labelPos.x() + .025*R);
+    QString label = QString::number(100 * w, 'f', 2) + "%";
+    labels.append(QPair<QPointF, QString>(labelPos, label));
+
+    Node *n_ = nullptr; // iterator
 
     // Find path from contributor to common ancestor
-    Node *p = nc;
+    n_ = nc;
+    Node *ca = nc;
     QPainterPath pp0 (nc->scenePos());
-    auto it = std::find(np.begin(), np.end(), p);
+    auto it = std::find(np.begin(), np.end(), n_);
     while (it == np.end()) {  // Common ancestor not found
-      it = std::find(np.begin(), np.end(), p->parent);
-      makePathSection(0, pp0, p, w, it == np.end());
-      p = p->parent;
-      assert(p);
-    }
+      it = std::find(np.begin(), np.end(), n_->parent);
+      makePathSection(0, pp0, n_, w, it == np.end());
 
-    Node *commonAncestor = p;
+      ca = n_;
+      n_ = n_->parent;
+      assert(n_);
+    }
+    assert(ca);
+
+    Node *commonAncestor = n_;
     qDebug() << "\tCommon ancestor of" << uint(n->id) << "and" << uint(nc->id)
              << "is: " << uint(commonAncestor->id);
 
     // Find path from node to common ancestor
-    p = n;
+    n_ = n;
+    Node *na = n;
     QPainterPath pp1 (n->scenePos());
-    while (p != commonAncestor) {
-      makePathSection(1, pp1, p, w, it == np.end());
-      p = p->parent;
-      assert(p);
+    while (n_ != commonAncestor) {
+      makePathSection(1, pp1, n_, w, n_->parent != commonAncestor);
+
+      na = n_;
+      n_ = n_->parent;
+      assert(n_);
     }
+    assert(na);
 
     // Connect paths
+//    QPainterPath pp2;
+//    pp2.moveTo(pp0.pointAtPercent(1));
+//    pp2.lineTo(pp1.pointAtPercent(1));
+//    aouPath(pp2, w, QColor::fromRgb(0, 255, 0));
+//    qDebug() << "\t\tlv2 [" << uint(ca->id) << "|" << uint(na->id)
+//             << "] (" << pp2.pointAtPercent(0) << "," << pp2.pointAtPercent(1) << ")";
+
     QPainterPath pp2;
-    pp2.moveTo(pp0.pointAtPercent(1));
-    pp2.lineTo(pp1.pointAtPercent(1));
-    qDebug() << "\t\tline2(" << pp2.pointAtPercent(0) << "," << pp2.pointAtPercent(1) << ")";
-    aouPath(pp2, w, QColor::fromRgb(0, 255, 0));
+    makeVerticalPathSection(2, pp2, ca, na, w);
   }
 
   qDebug() << "\n";
@@ -455,10 +513,18 @@ void Contributors::paint (QPainter *painter,
 
   painter->save();
   for (const Path &p: paths) {
-    pen.setWidthF(w * (1 + p.width));
+    pen.setWidthF(w * (1. + p.width));
     pen.setColor(p.debugcolor);
     painter->setPen(pen);
     painter->drawPath(p.path);
+  }
+  pen.setColor(Qt::black);
+  QFont f = painter->font();
+  f.setPointSizeF(PTGraphBuilder::fontSize(tree->radius()));
+  painter->setFont(f);
+  painter->setPen(pen);
+  for (const auto &l: labels) {
+    painter->drawText(l.first, l.second);
   }
   painter->restore();
 }
@@ -530,9 +596,7 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
   painter->setPen(tree->pathPen(details::BORDER_AXIS));
   painter->setBrush(Qt::white);
 
-  float factor = radius / 50;
-  float f = std::max(1.f, factor);
-  font.setPointSizeF(f);
+  font.setPointSizeF(PTGraphBuilder::fontSize(radius));
 
   metrics = QFontMetrics(font);
   painter->setFont(font);
@@ -626,6 +690,10 @@ float PTGraphBuilder::nodeWidth(float radius) {
 
 float PTGraphBuilder::pathWidth(float baseWidth, float radius) {
   return baseWidth * radius / 400.;
+}
+
+float PTGraphBuilder::fontSize(float radius) {
+  return std::max(1.f, radius / 50);
 }
 
 void PTGraphBuilder::updateLayout (Node *localRoot, PolarCoordinates &pc) {
