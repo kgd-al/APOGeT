@@ -17,6 +17,7 @@
 
 #include <QDebug>
 
+
 #include "phylogenyviewer.h"
 #include "graphicutils.h"
 #include "graphicsviewzoom.h"
@@ -251,9 +252,13 @@ void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC
 // ============================================================================
 
 void PhylogenyViewer_base::renderTo (QString filename) {
-  if (filename.isEmpty())
+  Node *hovered = nullptr;
+  if (filename.isEmpty()) {
+    hovered = _items.contributors->species;
     filename = QFileDialog::getSaveFileName(this, "Save to", ".",
                                             "pdf (*.pdf);;Images (*.png)");
+    if (hovered)  hovered->hoverEnterEvent(nullptr);
+  }
 
   if (filename.isEmpty()) return;
 
@@ -265,16 +270,16 @@ void PhylogenyViewer_base::renderTo (QString filename) {
     pixmap.save(filename);
   }
 
+  if (hovered)  hovered->hoverLeaveEvent(nullptr);
   std::cout << "Saved to " << filename.toStdString() << std::endl;
 }
 
 void PhylogenyViewer_base::renderToPDF(const QString &filename) const {
   QPrinter printer(QPrinter::HighResolution);
-  printer.setPageSize(QPrinter::A4);
+  printer.setPageSizeMM(_items.scene->sceneRect().size());
   printer.setOrientation(QPrinter::Portrait);
   printer.setOutputFormat(QPrinter::PdfFormat);
   printer.setOutputFileName(filename);
-
 
   QPainter p;
   if(!p.begin( &printer ))

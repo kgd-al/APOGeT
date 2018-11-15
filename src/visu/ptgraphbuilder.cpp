@@ -330,7 +330,7 @@ void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidge
 // == Species contributions drawer
 // ============================================================================
 
-Contributors::Contributors (VTree tree) : tree(tree) {
+Contributors::Contributors (VTree tree) : tree(tree), species(nullptr) {
   setZValue(CONTRIBUTORS_LEVEL);
 }
 
@@ -403,7 +403,7 @@ void Contributors::show (SID sid, const GUIItems &items,
   const float R = tree->radius();
 
   // Retrieve graphic item of given species
-  Node *n = items.nodes.value(sid);
+  Node *n = species = items.nodes.value(sid);
   assert(n->id == sid);
 
   // Retrieve all of its ancestors
@@ -419,6 +419,7 @@ void Contributors::show (SID sid, const GUIItems &items,
     if (c.speciesID() != sid)  totalWidth += c.count();
 
   paths.clear();
+  labels.clear();
   for (auto &c: contribs) {
     if (c.speciesID() == sid) continue;
 
@@ -470,6 +471,7 @@ void Contributors::show (SID sid, const GUIItems &items,
 }
 
 void Contributors::hide (void) {
+  species = nullptr;
   paths.clear();
   QGraphicsItem::hide();
 }
@@ -492,7 +494,7 @@ void Contributors::paint (QPainter *painter,
 
     // Draw path with fading color
     for (const Path &p: paths) {
-      pen.setColor(QColor::fromHsvF(c.hsvHueF(), c.hsvSaturationF(), 1-p.width));
+      pen.setColor(QColor::fromHsvF(c.hsvHueF(), p.width, .5 + .5 * p.width));
       painter->setPen(pen);
       painter->drawPath(p.path);
     }

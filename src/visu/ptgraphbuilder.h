@@ -260,6 +260,8 @@ struct Contributors : public QGraphicsItem {
   QMap<PathID, Path> paths;  ///< The paths connecting to the contributors
   QVector<QPair<QPointF, QString>> labels;  ///< The labels for each contributor
 
+  Node *species;  ///< The species whose contributors are shown (or null)
+
   /// Builds a contributors drawer
   Contributors (VTree tree);
 

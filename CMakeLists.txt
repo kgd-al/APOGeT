@@ -18,7 +18,7 @@ set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
 ## Self dependancies
 ################################################################################
 
-find_package(tools REQUIRED)
+find_package(tools CONFIG REQUIRED)
 include_directories(${tools_INCLUDE_DIRS})
 
 
@@ -67,7 +67,8 @@ if (NOT CLUSTER_BUILD)
 
     #set(CMAKE_PREFIX_PATH $(find $HOME/Qt* -path "*/lib/cmake"))
 
-    find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui PrintSupport)
+    set(QT_COMPONENTS Core Widgets Gui PrintSupport)
+    find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
     message(STATUS "Qt found at " ${Qt5_DIR})
     set(QT_LIBS Qt5::Core Qt5::Widgets Qt5::PrintSupport)
 
@@ -92,7 +93,7 @@ if (NOT CLUSTER_BUILD)
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
     set(MAYBE_GUI "apt-gui;apt-basicviewer")
-    set(GUI_LIB "${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui>")
+    set(GUI_LIB "${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui> ${QT_LIBS}")
 
     add_executable(
         apt-basicviewer
@@ -223,6 +224,16 @@ set(${PROJECT_NAME}_INCLUDE_DIRS
 
 set(${PROJECT_NAME}_LIBRARIES
     $<JOIN:${tools_LIBRARIES};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>;${GUI_LIB},
-    >)\n"
+    >)
+
+find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
+message(STATUS \"Qt found at \" ${Qt5_DIR})
+set(QT_LIBS ${QT_LIBS})
+
+set(${PROJECT_NAME}_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+if(NOT \${${PROJECT_NAME}_BUILD_TYPE} STREQUAL \${CMAKE_BUILD_TYPE})
+    message(FATAL_ERROR \"Mismatching build version!
+        Linking against '\${${PROJECT_NAME}_BUILD_TYPE}' while using '\${CMAKE_BUILD_TYPE}'\")
+endif()\n"
 )
 install(FILES ${CONFIG} DESTINATION cmake)
