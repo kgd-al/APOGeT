@@ -14,6 +14,7 @@ struct ViewerConfig {
   float minEnveloppe = 0; ///< Minimal enveloppe fullness a species must have to be shown
   bool showNames = true;  ///< Whether to display nodes
   bool autofit = true;    ///< Whether to keep the scene fully in view
+  bool screenshots = false; ///< Whether to keep a screenshot per step
 };
 
 /// \cond internal
@@ -254,8 +255,6 @@ struct Contributors : public QGraphicsItem {
   struct Path {
     QPainterPath path; ///< The Qt path
     float width;  ///< The path width
-
-    QColor debugcolor;
   };
 
   QMap<PathID, Path> paths;  ///< The paths connecting to the contributors
@@ -276,6 +275,20 @@ struct Contributors : public QGraphicsItem {
 
   /// Paints the paths to the various contributors
   void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
+
+private:
+  /// \returns the identificator for the given path
+  PathID pathID (const QPainterPath &p);
+
+  /// Creates a new entry for p's id or update existing weight
+  void addOrUpdate (const QPainterPath &p, float w);
+
+  /// Register a, potentially subdivided, vertical path between the two nodes
+  void verticalPath (Node *n0, Node *n1, float w);
+
+  /// Register the horizontal path from \p n to its parent's timeline
+  /// if \p vertical, also register the vertical section
+  void makePath (Node *n, float w, bool vertical);
 };
 
 /// Graphics item managing the graph's boundaries and legend

@@ -12,6 +12,7 @@
 #include <QToolTip>
 
 #include <QPixmap>
+#include <QPrinter>
 #include <QFileDialog>
 
 #include <QDebug>
@@ -122,7 +123,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   // Print action
   QAction *print = new QAction(style()->standardPixmap(QStyle::SP_DialogSaveButton), "Print", this);
   print->setShortcut(Qt::ControlModifier + Qt::Key_P);
-  connect(print, &QAction::triggered, this, &PhylogenyViewer_base::render);
+  connect(print, &QAction::triggered, [this] { renderTo(""); });
 
   // Show names checkbox
   QCheckBox *showNames = new QCheckBox("Show names");
@@ -222,6 +223,13 @@ void PhylogenyViewer_base::treeStepped (uint step, const LivingSet &living) {
   _items.border->setRadius(step);
   _items.scene->setSceneRect(_items.border->boundingRect());
   makeFit(_config.autofit);
+
+  if (_config.screenshots) {
+    QString filename;
+    QTextStream qss(&filename);
+    qss << "snapshots/ptree_step" << step << ".png";
+    renderTo(filename);
+  }
 }
 
 void PhylogenyViewer_base::genomeEntersEnveloppe (SID sid, GID) {
@@ -244,13 +252,37 @@ void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC
 
 void PhylogenyViewer_base::renderTo (QString filename) {
   if (filename.isEmpty())
-    filename = QFileDialog::getSaveFileName(this, "Save to", ".", "Images (*.png)");
+    filename = QFileDialog::getSaveFileName(this, "Save to", ".",
+                                            "pdf (*.pdf);;Images (*.png)");
 
   if (filename.isEmpty()) return;
 
-  QPixmap pixmap = renderToPixmap();
-  pixmap.save(filename);
+  if (filename.endsWith("pdf"))
+    renderToPDF(filename);
+
+  else {
+    QPixmap pixmap = renderToPixmap();
+    pixmap.save(filename);
+  }
+
   std::cout << "Saved to " << filename.toStdString() << std::endl;
+}
+
+void PhylogenyViewer_base::renderToPDF(const QString &filename) const {
+  QPrinter printer(QPrinter::HighResolution);
+  printer.setPageSize(QPrinter::A4);
+  printer.setOrientation(QPrinter::Portrait);
+  printer.setOutputFormat(QPrinter::PdfFormat);
+  printer.setOutputFileName(filename);
+
+
+  QPainter p;
+  if(!p.begin( &printer ))
+    std::cerr << "Failed to creating painting device for file "
+              << filename.toStdString() << std::endl;
+
+  else
+    _items.scene->render(&p);
 }
 
 QPixmap PhylogenyViewer_base::renderToPixmap (const QSize &requestedSize) const {

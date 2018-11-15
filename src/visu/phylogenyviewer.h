@@ -138,6 +138,9 @@ public slots:
   /// Prints the current scene into a pixmap of size \p requestedSize
   QPixmap renderToPixmap (const QSize &requestedSize) const;
 
+  /// Prints the current scene into a (vector?) pdf
+  void renderToPDF (const QString &filename) const;
+
   /// Process a hover event
   virtual void hoverEvent (SID sid, bool entered) = 0;
 

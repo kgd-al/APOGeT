@@ -67,9 +67,9 @@ if (NOT CLUSTER_BUILD)
 
     #set(CMAKE_PREFIX_PATH $(find $HOME/Qt* -path "*/lib/cmake"))
 
-    find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui)
+    find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui PrintSupport)
     message(STATUS "Qt found at " ${Qt5_DIR})
-    set(QT_LIBS Qt5::Core Qt5::Widgets)
+    set(QT_LIBS Qt5::Core Qt5::Widgets Qt5::PrintSupport)
 
     ############################################################################
     ## GUI sources files
