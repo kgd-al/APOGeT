@@ -413,13 +413,16 @@ void Contributors::show (SID sid, const GUIItems &items,
     while (p) np.push_back(p), p = p->parent;
   }
 
+  // Clean previous drawing
+  paths.clear();
+  labels.clear();
+
   // Total contribution count (excluding itself)
   float totalWidth = 0;
   for (auto &c: contribs)
     if (c.speciesID() != sid)  totalWidth += c.count();
 
-  paths.clear();
-  labels.clear();
+  // Start parsing individual contributions
   for (auto &c: contribs) {
     if (c.speciesID() == sid) continue;
 

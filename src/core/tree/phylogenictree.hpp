@@ -627,6 +627,8 @@ protected:
       Node *oldMC = n->parent(),
            *newMC = n->updateElligibilities(_nodes);
 
+      (void)oldMC;
+      (void)newMC;
       assert(!oldMC || oldMC == newMC);
     }
   }

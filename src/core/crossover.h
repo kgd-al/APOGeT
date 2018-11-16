@@ -34,13 +34,13 @@ class SELF_AWARE_GENOME(BOCData) {
   }
 
   /// Genetic distance that maximises reproduction compatibility
-  DECLARE_GENOME_FIELD(float, optimalDistance)
+  DECLARE_GENOME_FIELD(float, optimalDistance);
 
   /// Standard deviation for distances below optimal
-  DECLARE_GENOME_FIELD(float, inbreedTolerance)
+  DECLARE_GENOME_FIELD(float, inbreedTolerance);
 
   /// Standard deviation for distances above optimal
-  DECLARE_GENOME_FIELD(float, outbreedTolerance)
+  DECLARE_GENOME_FIELD(float, outbreedTolerance);
 
   /// \cond internal
   /// Needs privileged access
@@ -48,14 +48,14 @@ class SELF_AWARE_GENOME(BOCData) {
   /// \endcond
 
 public:
-  /// Helper alias to the source of randomness.
+  /// Helper alias to the source of randomness
   using Dice = SelfAwareGenome<BOCData>::Dice;
 
   /// The possible sexes
   enum Sex { FEMALE, MALE };
 
   /// Which sex the associated genome codes for
-  DECLARE_GENOME_FIELD(Sex, sex)
+  DECLARE_GENOME_FIELD(Sex, sex);
 
   // ========================================================================
   // == Classification data

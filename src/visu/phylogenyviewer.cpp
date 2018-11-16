@@ -94,7 +94,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
 
   // Create layout
   auto *layout = new QBoxLayout(direction);
-  Qt::Orientation orientation;
+  Qt::Orientation orientation = Qt::Vertical;
   switch (direction) {
   case Direction::LeftToRight:
   case Direction::RightToLeft:
@@ -243,7 +243,31 @@ void PhylogenyViewer_base::genomeEntersEnveloppe (SID sid, GID) {
 void PhylogenyViewer_base::genomeLeavesEnveloppe (SID, GID) {}
 
 void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC) {
-  assert(false);
+  Node *n = _items.nodes.value(sid),
+       *oldP = _items.nodes.value(oldMC),
+       *newP = _items.nodes.value(newMC);
+
+  assert(n && oldP && newP);
+  assert(n->id == sid);
+  assert(oldP->id == oldMC);
+  assert(newP->id == newMC);
+
+  n->parent = newP;
+  oldP->subnodes.removeAll(n);
+  newP->subnodes.append(n);
+  std::sort(newP->subnodes.begin(), newP->subnodes.end(),
+            [] (const Node *lhs, const Node *rhs) {
+    return lhs->id > rhs->id;
+  });
+
+  if (n->path)  n->path->start = newP;
+  n->setVisible(Node::PARENT, newP->subtreeVisible());
+
+  PTGraphBuilder::updateLayout(_items);
+  _view->update();
+
+  qDebug() << "Major contributor for species" << uint(sid)
+           << "changed from" << uint(oldMC) << "to" << uint(newMC);
 }
 
 
