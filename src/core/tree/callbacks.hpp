@@ -9,8 +9,6 @@
 
 namespace phylogeny {
 
-/// \cond internal
-
 /// Contains a set of functions called by the phylogenic tree when each of the
 /// corresponding events occur
 template <typename PT>
@@ -52,8 +50,6 @@ struct Callbacks_t {
   /// as well as the id of the previous and new MC
   void onMajorContributorChanged (SID sid, SID oldMC, SID newMC);
 };
-
-/// \endcond
 
 } // end of namespace phylogeny
 

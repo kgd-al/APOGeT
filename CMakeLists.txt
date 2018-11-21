@@ -160,8 +160,7 @@ if (GENERATE_HELP)
 
     # Dot not look into the abyss
     set(DOXYGEN_EXCLUDE_SYMBOLS "_details::deepmagic::*"
-                                "_*_link_checker"
-                                "_*_metadata"
+                                "SAGFieldMetadata"
                                 "CFILE")
 
     # Qt help
@@ -223,7 +222,7 @@ set(${PROJECT_NAME}_INCLUDE_DIRS
     ${CMAKE_INSTALL_PREFIX}/include)
 
 set(${PROJECT_NAME}_LIBRARIES
-    $<JOIN:${tools_LIBRARIES};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>;${GUI_LIB},
+    $<JOIN:${tools_LIBRARIES};${GUI_LIB};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>,
     >)
 
 find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})

@@ -1,6 +1,13 @@
 #ifndef _PT_GRAPH_BUILDER_HPP_
 #define _PT_GRAPH_BUILDER_HPP_
 
+/*!
+ * \file ptgraphbuilder.h
+ *
+ * Contains the declarations for the externalized phylogenic tree graphical
+ * interface builder
+ */
+
 #include <QGraphicsScene>
 #include <QGraphicsItem>
 
@@ -20,6 +27,8 @@ struct ViewerConfig {
 /// \cond internal
 
 struct PhylogenyViewer_base;
+
+/// Constant pointer to a phylogenic tree viewer instance
 using VTree = PhylogenyViewer_base *const;
 
 struct GUIItems;
@@ -338,7 +347,6 @@ struct Border : public QGraphicsItem {
 };
 
 namespace details {
-/// \cond internal
 /// The set of pen available for painting
 enum PenType {
   PATH_BASE, ///< Default pen
@@ -346,8 +354,7 @@ enum PenType {
   PATH_CONTRIBUTOR, ///< Paths leading to a species' contributor
   BORDER_AXIS,  ///< Major grid axis
 };
-/// \endcond
-}
+} // end of namespace details
 
 /// Cache structure for easy management of the graph's various components
 struct GUIItems {
@@ -365,7 +372,7 @@ struct GUIItems {
 
 /// Helper structure managing the construction of a PTree's associated graph
 struct PTGraphBuilder {
-  using Config = ViewerConfig;  ///< \copydoc PhylogenyViewer_base::Config
+  using Config = ViewerConfig;  ///< \copydoc gui::ViewerConfig
 
   /// Helper alias for the cache regrouping all building material
   using Cache = PTreeBuildingCache;

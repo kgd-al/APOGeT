@@ -18,7 +18,9 @@
 namespace genotype {
 
 /// Common crossover control data
-class SELF_AWARE_GENOME(BOCData) {
+class BOCData : public SelfAwareGenome<BOCData> {
+  APT_SAG()
+
   // ========================================================================
   // == Compatibility function
 
@@ -34,13 +36,13 @@ class SELF_AWARE_GENOME(BOCData) {
   }
 
   /// Genetic distance that maximises reproduction compatibility
-  DECLARE_GENOME_FIELD(float, optimalDistance);
+  float optimalDistance;
 
   /// Standard deviation for distances below optimal
-  DECLARE_GENOME_FIELD(float, inbreedTolerance);
+  float inbreedTolerance;
 
   /// Standard deviation for distances above optimal
-  DECLARE_GENOME_FIELD(float, outbreedTolerance);
+  float outbreedTolerance;
 
   /// \cond internal
   /// Needs privileged access
@@ -55,7 +57,7 @@ public:
   enum Sex { FEMALE, MALE };
 
   /// Which sex the associated genome codes for
-  DECLARE_GENOME_FIELD(Sex, sex);
+  Sex sex;
 
   // ========================================================================
   // == Classification data
@@ -210,6 +212,12 @@ public:
        << " G: " << generation << "\n";
   }
 };
+
+DECLARE_GENOME_FIELD(BOCData, float, optimalDistance)
+DECLARE_GENOME_FIELD(BOCData, float, inbreedTolerance)
+DECLARE_GENOME_FIELD(BOCData, float, outbreedTolerance)
+DECLARE_GENOME_FIELD(BOCData, BOCData::Sex, sex)
+
 
 /// Pretty prints a sex enumeration value
 std::ostream& operator<< (std::ostream &os, BOCData::Sex s);
