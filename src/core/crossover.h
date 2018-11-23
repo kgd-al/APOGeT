@@ -153,11 +153,10 @@ public:
   // == Specific genetic operators
 
   /// Updates internal data to reflect the clone status of the associated genome
-  void updateCloneLineage (GID parent, Dice &dice) {
-    sex = dice.toss(Sex::FEMALE, Sex::MALE);
-    id = nextID();
-    parents[MOTHER] = parent;
+  void updateCloneLineage (void) {
+    parents[MOTHER] = id;
     parents[FATHER] = INVALID_GID;
+    id = nextID();
     generation++;
   }
 
