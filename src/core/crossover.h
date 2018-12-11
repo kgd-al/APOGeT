@@ -256,6 +256,33 @@ template <> struct SAG_CONFIG_FILE(BOCData) {
   DECLARE_PARAMETER(MutationRates, mutationRates)
 };
 
+/// Specialization for the sex field which is not included in the distances
+template <>
+struct MutationSettings::BoundsOperators<genotype::BOCData::Sex, void> {
+  using Sex = genotype::BOCData::Sex; ///< Helper alias to the sex enumeration
+  using Dice = MutationSettings::Dice; ///< Helper alias to the rng
+
+  /// \returns either Male or Female
+  static Sex rand (const Sex&, const Sex&, Dice &dice) {
+    return dice.toss(Sex::MALE, Sex::FEMALE);
+  }
+
+  /// \returns 0
+  static double distance (const Sex&, const Sex&, const Sex&, const Sex&) {
+    return 0;
+  }
+
+  /// \returns flip the sex
+  static void mutate (Sex &s, const Sex&, const Sex&, Dice&) {
+    s = (s == Sex::MALE) ? Sex::FEMALE : Sex::MALE;
+  }
+
+  /// \returns whether the sex is either male or female
+  static bool check (Sex &s, const Sex&, const Sex&) {
+    return (s == Sex::MALE) || (s == Sex::FEMALE);
+  }
+};
+
 } // end of namespace config
 
 namespace genotype {
@@ -284,16 +311,21 @@ struct requiresAlignment<T, std::void_t<typename T::Alignment>> : std::true_type
 /// \param child Container for child genome in case of successfull mating.
 /// Untouched otherwise
 /// \param dice Source of randomness.
+/// \param oDistance If not null, will be filled with the genomic distance
+/// \param oCompatibility If not null, will be filled with perceived compatibility
 template <typename GENOME>
 std::enable_if_t<!_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
-                     GENOME &child, rng::AbstractDice &dice) {
+                     GENOME &child, rng::AbstractDice &dice,
+                float *oDistance = nullptr, float *oCompatibility = nullptr) {
 
   double dist = distance(mother, father);
   assert(0 <= dist);
+  if (oDistance) *oDistance = dist;
 
   double compat = mother.compatibility(dist);
   assert(0 <= compat && compat <= 1);
+  if (oCompatibility)  *oCompatibility = compat;
 
   if (dice(compat)) {
     child = cross(mother, father, dice);
@@ -324,18 +356,23 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
 /// \param child Container for child genome in case of successfull mating.
 /// Untouched otherwise
 /// \param dice Source of randomness.
+/// \param oDistance If not null, will be filled with the genomic distance
+/// \param oCompatibility If not null, will be filled with perceived compatibility
 template <typename GENOME>
 std::enable_if_t<_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
-                      GENOME &child, rng::AbstractDice &dice) {
+                      GENOME &child, rng::AbstractDice &dice,
+                float *oDistance = nullptr, float *oCompatibility = nullptr) {
 
   typename GENOME::Alignment alg = align(mother, father);
 
   double dist = distance(mother, father, alg);
   assert(0 <= dist);
+  if (oDistance) *oDistance = dist;
 
   double compat = mother.compatibility(dist);
   assert(0 <= compat && compat <= 1);
+  if (oCompatibility)  *oCompatibility = compat;
 
   if (dice(compat)) {
     child = cross(mother, father, dice, alg);

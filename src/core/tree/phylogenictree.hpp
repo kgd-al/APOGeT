@@ -220,9 +220,9 @@ protected:
     /// \return The species identificator of \p g 's parent \p p or SID::INVALID
     /// if \p g does not have such a parent
     SID parentSID (const GENOME &g, Parent p) {
-      if (!g.hasParent(p))  return SID::INVALID;
+      if (!g.crossoverData().hasParent(p))  return SID::INVALID;
 
-      auto &d = map.at(g.parent(p));
+      auto &d = map.at(g.crossoverData().parent(p));
       d.refCount++;
       return d.species;
     }
@@ -243,10 +243,10 @@ protected:
 
     /// Try to remove \p g (and its eventual parents) from the association map
     SID remove (const GENOME &g) {
-      auto sid = remove(g.id());
+      auto sid = remove(g.crossoverData().id);
       for (Parent p: {Parent::MOTHER, Parent::FATHER})
-        if (g.hasParent(p))
-          remove(g.parent(p));
+        if (g.crossoverData().hasParent(p))
+          remove(g.crossoverData().parent(p));
       return sid;
     }
 
@@ -328,7 +328,7 @@ protected:
     uint matable = 0;
     for (const GENOME &e: species->enveloppe) {
       double d = distance(g, e);
-      double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
+      double c = std::min(g.crossoverData()(d), e.crossoverData()(d));
 
       if (c >= Config::compatibilityThreshold()) matable++;
       dccache.push_back(d, c);
@@ -351,7 +351,7 @@ protected:
     float avgCompat = 0;
     for (const GENOME &e: species->enveloppe) {
       double d = distance(g, e);
-      double c = std::min(g.const_cdata()(d), e.const_cdata()(d));
+      double c = std::min(g.crossoverData()(d), e.crossoverData()(d));
 
       avgCompat += c;
       dccache.push_back(d, c);
@@ -419,7 +419,7 @@ protected:
                  SID sid0, SID sid1) {
 
     if (debug()) {
-      std::cerr << "Attempting to add genome " << g.id()
+      std::cerr << "Attempting to add genome " << g.crossoverData().id
                 << " to species ";
       if (!species1)
         std::cerr << species0->id();
@@ -531,7 +531,7 @@ protected:
       if (debug())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(g);
-      if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(), g.id());
+      if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(), g.crossoverData().id);
       for (uint i=0; i<k; i++)
         dist[{i, k}] = dccache.distances[i];
 
@@ -539,27 +539,28 @@ protected:
     } else {
       assert(k == Config::enveloppeSize());
       std::vector<GID> ids (k);
-      for (uint i=0; i<k; i++)  ids[i] = species->enveloppe[i].id();
+      for (uint i=0; i<k; i++)  ids[i] = species->enveloppe[i].crossoverData().id;
       _details::EnveloppeContribution ec =
-          computeContribution(dist, dccache.distances, g.id(), ids);
+          computeContribution(dist, dccache.distances, g.crossoverData().id, ids);
 
       // Genome inside the enveloppe. Nothing to do
       if (!ec.better) {
         if (debug())
-          std::cerr << "\t" << g.id() << "'s contribution is too low ("
+          std::cerr << "\t" << g.crossoverData().id << "'s contribution is too low ("
                     << ec.value << ")" << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
         if (debug())
-          std::cerr << "\t" << g.id() << "'s contribution is better "
+          std::cerr << "\t" << g.crossoverData().id << "'s contribution is better "
                     << "than enveloppe point " << ec.than << " (id: "
-                    << species->enveloppe[ec.than].id()
+                    << species->enveloppe[ec.than].crossoverData().id
                     << ", c = " << ec.value << ")" << std::endl;
 
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(species->id(), species->enveloppe[ec.than].id());
-          callbacks->onGenomeEntersEnveloppe(species->id(), g.id());
+          callbacks->onGenomeLeavesEnveloppe(
+            species->id(), species->enveloppe[ec.than].crossoverData().id);
+          callbacks->onGenomeEntersEnveloppe(species->id(), g.crossoverData().id);
         }
 
         species->enveloppe[ec.than] = g;
@@ -581,7 +582,7 @@ protected:
 
     insertInto(_step, g, s, cache, _callbacks);
     if (!ctb.empty()) updateContributions(s, ctb);
-    _idToSpecies.insert(g.id(), s->id());
+    _idToSpecies.insert(g.crossoverData().id, s->id());
     return s->id();
   }
 
