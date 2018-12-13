@@ -159,7 +159,7 @@ if (GENERATE_HELP)
                                  "*.cpp")
 
     # Dot not look into the abyss
-    set(DOXYGEN_EXCLUDE_SYMBOLS "_details::deepmagic::*"
+    set(DOXYGEN_EXCLUDE_SYMBOLS "_details*"
                                 "SAGFieldMetadata"
                                 "CFILE")
 
