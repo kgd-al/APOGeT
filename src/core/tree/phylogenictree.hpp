@@ -441,7 +441,7 @@ protected:
     contrib.emplace_back(sid0, 1 + (sid0 == sid1));
 
     // Register (if needed) second species
-    assert((species1 == nullptr) == (sid0 == sid1));
+    assert((species1 == nullptr) == (sid0 == sid1 || sid1 == SID::INVALID));
     if (species1) {
       species.push_back(species1);
       contrib.emplace_back(sid1, 1);
