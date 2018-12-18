@@ -308,15 +308,15 @@ struct requiresAlignment<T, std::void_t<typename T::Alignment>> : std::true_type
 ///
 /// \param mother Female genome, requested for compatibility data
 /// \param father Male genome
-/// \param child Container for child genome in case of successfull mating.
-/// Untouched otherwise
+/// \param litter Container for children genome. In case of successfull mating
+/// will contains as many offsprings as the input size. Untouched otherwise.
 /// \param dice Source of randomness.
 /// \param oDistance If not null, will be filled with the genomic distance
 /// \param oCompatibility If not null, will be filled with perceived compatibility
 template <typename GENOME>
 std::enable_if_t<!_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
-                     GENOME &child, rng::AbstractDice &dice,
+                std::vector<GENOME> &litter, rng::AbstractDice &dice,
                 float *oDistance = nullptr, float *oCompatibility = nullptr) {
 
   double dist = distance(mother, father);
@@ -328,8 +328,11 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
   if (oCompatibility)  *oCompatibility = compat;
 
   if (dice(compat)) {
-    child = cross(mother, father, dice);
-    if (dice(config::SAGConfigFile<BOCData>::mutateChild())) child.mutate(dice);
+    for (GENOME &child: litter) {
+      child = cross(mother, father, dice);
+      if (dice(config::SAGConfigFile<BOCData>::mutateChild()))
+        child.mutate(dice);
+    }
     return true;
   }
 
@@ -353,15 +356,15 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
 ///
 /// \param mother Female genome, requested for compatibility data
 /// \param father Male genome
-/// \param child Container for child genome in case of successfull mating.
-/// Untouched otherwise
+/// \param litter Container for children genome. In case of successfull mating
+/// will contains as many offsprings as the input size. Untouched otherwise.
 /// \param dice Source of randomness.
 /// \param oDistance If not null, will be filled with the genomic distance
 /// \param oCompatibility If not null, will be filled with perceived compatibility
 template <typename GENOME>
 std::enable_if_t<_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
-                      GENOME &child, rng::AbstractDice &dice,
+                std::vector<GENOME> &litter, rng::AbstractDice &dice,
                 float *oDistance = nullptr, float *oCompatibility = nullptr) {
 
   typename GENOME::Alignment alg = align(mother, father);
@@ -375,8 +378,11 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
   if (oCompatibility)  *oCompatibility = compat;
 
   if (dice(compat)) {
-    child = cross(mother, father, dice, alg);
-    if (dice(config::SAGConfigFile<BOCData>::mutateChild())) child.mutate(dice);
+    for (GENOME &child: litter) {
+      child = cross(mother, father, dice, alg);
+      if (dice(config::SAGConfigFile<BOCData>::mutateChild()))
+        child.mutate(dice);
+    }
     return true;
   }
 
