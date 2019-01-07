@@ -1,5 +1,7 @@
 #include "crossover.h"
 
+std::atomic<genotype::BOCData::GID_ut> genotype::BOCData::NEXT_ID = 0;
+
 #define GENOME BOCData
 
 DEFINE_GENOME_FIELD_WITH_BOUNDS(float, optimalDistance, "mu", 0.f, true, 4.f, 100.f)

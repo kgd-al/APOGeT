@@ -236,6 +236,10 @@ protected:
       assert(ref > 0);
       ref--;
 
+      if (config::PTree::DEBUG_ID2SPECIES())
+        std::cerr << "Removed a reference to " << id
+                  << " current count is " << ref << std::endl;
+
       if (ref == 0)  map.erase(it);
 
       return sid;
@@ -256,6 +260,10 @@ protected:
       d.refCount = 1;
       d.species = sid;
       map[gid] = d;
+
+      if (config::PTree::DEBUG_ID2SPECIES())
+        std::cerr << "Inserted a reference to " << gid
+                  << " current count is 1" << std::endl;
     }
 
     /// \return species indentificator for genome \p gid

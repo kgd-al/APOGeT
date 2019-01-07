@@ -76,9 +76,27 @@ public:
   /// The id of the associated genome
   GID id;
 
-  /// Generate next id value (thread-safe)
+private:
+  /// Helper alias to the underlying type of the genetic identificators
+  using GID_ut = std::underlying_type<GID>::type;
+
+  /// Thread-safe counter for sequentially affecting identifcator to genomes
+  static std::atomic<GID_ut> NEXT_ID;
+
+public:
+  /// Sets the first identificator so that the next call
+  ///  to nextID() returns firstID+1
+  /// \note thread-safe
+  static void setFirstID (GID firstID) {
+    NEXT_ID = GID_ut(firstID) + 1;
+  }
+
+  /// Generate next id value
+  /// \note thread-safe
   static GID nextID (void) {
-    static std::atomic<uint> NEXT_ID (0);
+    if (NEXT_ID == std::numeric_limits<GID_ut>::max())
+      utils::doThrow<std::out_of_range>("Exhausted all possible identifers for the underlying"
+                                        "type ", utils::className<GID_ut>());
     return GID(NEXT_ID++);
   }
 

@@ -44,13 +44,16 @@ struct CFILE : public ConfigFile<CFILE> {
   DECLARE_DEBUG_PARAMETER(uint, DEBUG_LEVEL, 0)
 
   /// Should debug info about the ptree be printed out ?
-  DECLARE_DEBUG_PARAMETER(bool, DEBUG_PTREE, 1)
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_PTREE, 0)
 
   /// Should debug info about the enveloppes be printed out ?
   DECLARE_DEBUG_PARAMETER(bool, DEBUG_ENVELOPPE, 0)
 
   /// Should debug info about the contributors be printed out ?
-  DECLARE_DEBUG_PARAMETER(bool, DEBUG_CONTRIBUTORS, 1)
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_CONTRIBUTORS, 0)
+
+  /// Should debug info about the idToSpecies map be printed out ?
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_ID2SPECIES, 0)
 };
 #undef CFILE
 
