@@ -11,7 +11,19 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic")#"-ftime-report")
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+
+
+################################################################################
+## Multi-configuration installation path
+################################################################################
+
+if (${CMAKE_INSTALL_PREFIX} MATCHES "^/home/")
+    string(TOLOWER ${CMAKE_BUILD_TYPE} BUILD_TYPE)
+    string(APPEND CMAKE_INSTALL_PREFIX "/${BUILD_TYPE}")
+    set(CMAKE_PREFIX_PATH ${CMAKE_INSTALL_PREFIX})
+endif()
 set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
+message(STATUS "Install path is ${CMAKE_INSTALL_PREFIX}/")
 
 
 ################################################################################
@@ -225,9 +237,11 @@ set(${PROJECT_NAME}_LIBRARIES
     $<JOIN:${tools_LIBRARIES};${GUI_LIB};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>,
     >)
 
-find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
-message(STATUS \"Qt found at \" ${Qt5_DIR})
-set(QT_LIBS ${QT_LIBS})
+if(NOT CLUSTER_BUILD)
+    find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
+    message(STATUS \"Qt found at \" ${Qt5_DIR})
+    set(QT_LIBS ${QT_LIBS})
+endif()
 
 set(${PROJECT_NAME}_BUILD_TYPE ${CMAKE_BUILD_TYPE})
 if(NOT \${${PROJECT_NAME}_BUILD_TYPE} STREQUAL \${CMAKE_BUILD_TYPE})
