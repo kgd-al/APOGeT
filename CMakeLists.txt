@@ -17,7 +17,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 ## Multi-configuration installation path
 ################################################################################
 
-if (${CMAKE_INSTALL_PREFIX} MATCHES "^/home/")
+if (${CMAKE_INSTALL_PREFIX} MATCHES "^$ENV{HOME}")
     string(TOLOWER ${CMAKE_BUILD_TYPE} BUILD_TYPE)
     string(APPEND CMAKE_INSTALL_PREFIX "/${BUILD_TYPE}")
     set(CMAKE_PREFIX_PATH ${CMAKE_INSTALL_PREFIX})
