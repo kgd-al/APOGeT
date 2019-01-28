@@ -9,8 +9,8 @@
 
 /// Decoy genome with no internal structure
 struct Genome {
-  /// Decoy alignment for decoy genome
-  struct Alignment {};
+//  /// Decoy alignment for decoy genome
+//  struct Alignment {};
 
   /// Should convert the genome to json but, in fact, does nothing
   friend void to_json (nlohmann::json&, const Genome&) {}

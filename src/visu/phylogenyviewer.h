@@ -187,12 +187,12 @@ protected:
 /// This class can be used as a standalone (top-level) viewer or be embedded in
 /// any kind of layout. It is possible to control the orientation of the controls
 /// with respect to the main view.
-template <typename GENOME>
+template <typename GENOME, typename UDATA = phylogeny::NoUserData>
 class PhylogenyViewer : public PhylogenyViewer_base {
 public:
 
   /// Helper alias to the PTree visualized
-  using PTree = phylogeny::PhylogenicTree<GENOME>;
+  using PTree = phylogeny::PhylogenicTree<GENOME, UDATA>;
 
   /// Helper alias to the callbacks type used by the PTree
   using PTCallbacks = typename PTree::Callbacks;
@@ -281,13 +281,13 @@ private:
 /// \brief Specialization of the callbacks for a PTree with parameter \p GENOME.
 ///
 /// Forwards events to the viewer.
-template <typename GENOME>
-struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME>> {
+template <typename GENOME, typename UDATA>
+struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME, UDATA>> {
   /// The PTree type at the source of these callbacks
-  using PT = phylogeny::PhylogenicTree<GENOME>;
+  using PT = phylogeny::PhylogenicTree<GENOME, UDATA>;
 
   /// The PViewer type receiving these forwarded events
-  using PV = gui::PhylogenyViewer<GENOME>;
+  using PV = gui::PhylogenyViewer<GENOME, UDATA>;
 
   /// Helper alias to a genomic identificator
   using GID = phylogeny::GID;

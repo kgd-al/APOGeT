@@ -23,12 +23,21 @@
 
 namespace phylogeny {
 
+/// Placeholder for end-users not requiering additional phylogenic infomrations
+struct NoUserData {
+  void removedFromEnveloppe (void) const {} ///< Nothing to do
+  friend void to_json (json&, const NoUserData&) {}  ///< Nothing to store
+  friend void from_json (const json&, NoUserData&) {}  ///< Nothing to read
+};
+
 /// When kept informed about the birth/death and stepping events of a simulation
 /// this struct can generate a valid, complete, record of all species event
 /// with informations on both the hierarchical and invididual dynamics
 ///
 /// \tparam GENOME the genome of the observed individuals.
-template <typename GENOME>
+/// \tparam UDATA user data for collecting sample statistics at the individual
+/// level (defaults to nothing)
+template <typename GENOME, typename UDATA = NoUserData>
 class PhylogenicTree {
   /// Helper lambda for debug printing
   static constexpr auto debug = [] {
@@ -40,7 +49,7 @@ public:
   using Parent = genotype::BOCData::Parent;
 
   /// Helper alias to a species node
-  using Node = phylogeny::Node<GENOME>;
+  using Node = phylogeny::Node<GENOME, UDATA>;
 
   /// \copydoc Node::Ptr
   using Node_ptr = typename Node::Ptr;
@@ -49,7 +58,7 @@ public:
   using Nodes = typename Node::Collection;
 
   /// Specialization used by this tree. Uses CRTP
-  using Callbacks = Callbacks_t<PhylogenicTree<GENOME>>;
+  using Callbacks = Callbacks_t<PhylogenicTree<GENOME, UDATA>>;
 
   /// Helper alias for the configuration data
   using Config = config::PTree;
@@ -88,6 +97,16 @@ public:
   /// \return the node with \p sid
   const auto& nodeAt (SID i) const {
     return _nodes.at(i);
+  }
+
+  /// \return the user data for enveloppe point \p gid or nullptr if it is a
+  /// regular individual
+  UDATA* getUserData (GID id) const {
+    const auto &species = _nodes.at(_idToSpecies.at(id));
+    for (const auto &ep: species->enveloppe)
+      if (ep.genome.crossoverData().id == id)
+        return ep.userData.get();
+    return nullptr;
   }
 
   /// \return the current timestep for this PTree
@@ -129,8 +148,10 @@ public:
   }
 
   /// Insert \p g into this PTree
-  /// \return The species \p g was added to
-  SID addGenome (const GENOME &g) {
+  /// \return The species \p g was added to and, if it was also added to the
+  /// enveloppe, a pointer to the associated user data structure
+  /// (nullptr otherwise).
+  std::pair<SID, UDATA*> addGenome (const GENOME &g) {
     // Ensure that the root exists
     if (!_root) {
       _root = makeNode(SpeciesContribution{});
@@ -153,10 +174,10 @@ public:
       s1 = _nodes[fSID];
     }
 
-    SID sid = addGenome(g, s0, s1, mSID, fSID);
+    auto ret = addGenome(g, s0, s1, mSID, fSID);
 
     if (Config::DEBUG_LEVEL())  std::cerr << std::endl;
-    return sid;
+    return ret;
   }
 
   /// Remove \p g from this PTree (and update relevant internal data)
@@ -334,9 +355,9 @@ protected:
     dccache.reserve(k);
 
     uint matable = 0;
-    for (const GENOME &e: species->enveloppe) {
-      double d = distance(g, e);
-      double c = std::min(g.crossoverData()(d), e.crossoverData()(d));
+    for (const auto &ep: species->enveloppe) {
+      double d = distance(g, ep.genome);
+      double c = std::min(g.crossoverData()(d), ep.genome.crossoverData()(d));
 
       if (c >= Config::compatibilityThreshold()) matable++;
       dccache.push_back(d, c);
@@ -357,9 +378,9 @@ protected:
     dccache.reserve(k);
 
     float avgCompat = 0;
-    for (const GENOME &e: species->enveloppe) {
-      double d = distance(g, e);
-      double c = std::min(g.crossoverData()(d), e.crossoverData()(d));
+    for (const auto &ep: species->enveloppe) {
+      double d = distance(g, ep.genome);
+      double c = std::min(g.crossoverData()(d), ep.genome.crossoverData()(d));
 
       avgCompat += c;
       dccache.push_back(d, c);
@@ -423,8 +444,9 @@ protected:
   /// Find the appropriate place for \p g in the subtree(s) rooted at
   ///  \p species0 (and species1)
   /// \todo THis function seems ugly and hard to maintain
-  SID addGenome (const GENOME &g, Node_ptr species0, Node_ptr species1,
-                 SID sid0, SID sid1) {
+  std::pair<SID, UDATA*> addGenome (const GENOME &g,
+                                    Node_ptr species0, Node_ptr species1,
+                                    SID sid0, SID sid1) {
 
     if (debug()) {
       std::cerr << "Attempting to add genome " << g.crossoverData().id
@@ -518,7 +540,7 @@ protected:
       assert(false);
 
     assert(false);
-    return SID::INVALID;
+    return {SID::INVALID, nullptr};
   }
 
   /// Insert \p g into node \p species, possibly changing the enveloppe.
@@ -526,19 +548,22 @@ protected:
   /// Callbacks:
   ///   - Callbacks_t::onGenomeEntersEnveloppe
   ///   - Callbacks_t::onGenomeLeavesEnveloppe
-  friend void insertInto (uint step, const GENOME &g, Node_ptr species,
-                          const DCCache &dccache, Callbacks *callbacks) {
+  friend UDATA* insertInto (uint step, const GENOME &g, Node_ptr species,
+                            const DCCache &dccache, Callbacks *callbacks) {
 
     using op = _details::DistanceMap::key_type;
     const uint k = species->enveloppe.size();
 
     auto &dist = species->distances;
 
+    UDATA *userData = nullptr;
+
     // Populate the enveloppe
     if (k < Config::enveloppeSize()) {
       if (debug())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
-      species->enveloppe.push_back(g);
+      species->enveloppe.push_back(Node::EnvPoint::make(g));
+      userData = species->enveloppe.back().userData.get();
       if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(), g.crossoverData().id);
       for (uint i=0; i<k; i++)
         dist[{i, k}] = dccache.distances[i];
@@ -547,7 +572,7 @@ protected:
     } else {
       assert(k == Config::enveloppeSize());
       std::vector<GID> ids (k);
-      for (uint i=0; i<k; i++)  ids[i] = species->enveloppe[i].crossoverData().id;
+      for (uint i=0; i<k; i++)  ids[i] = species->enveloppePointId(i);
       _details::EnveloppeContribution ec =
           computeContribution(dist, dccache.distances, g.crossoverData().id, ids);
 
@@ -559,19 +584,24 @@ protected:
 
       // Replace closest enveloppe point with new one
       } else {
+        typename Node::EnvPoint &ep = species->enveloppe[ec.than];
+        auto ep_id = ep.genome.crossoverData().id;
+
         if (debug())
           std::cerr << "\t" << g.crossoverData().id << "'s contribution is better "
                     << "than enveloppe point " << ec.than << " (id: "
-                    << species->enveloppe[ec.than].crossoverData().id
-                    << ", c = " << ec.value << ")" << std::endl;
+                    << ep_id << ", c = " << ec.value << ")" << std::endl;
 
         if (callbacks) {
-          callbacks->onGenomeLeavesEnveloppe(
-            species->id(), species->enveloppe[ec.than].crossoverData().id);
+          callbacks->onGenomeLeavesEnveloppe(species->id(), ep_id);
           callbacks->onGenomeEntersEnveloppe(species->id(), g.crossoverData().id);
         }
 
-        species->enveloppe[ec.than] = g;
+        ep.userData->removedFromEnveloppe();
+        userData = ep.userData.get();
+        *ep.userData = UDATA();
+
+        ep.genome = g;
         for (uint i=0; i<k; i++)
           if (i != ec.than)
             dist[op{i,ec.than}] = dccache.distances[i];
@@ -580,18 +610,21 @@ protected:
 
     species->data.count++;
     species->data.lastAppearance = step;
+
+    return userData;
   }
 
   /// Update species \p s by inserting genome \p g, updating the contributions
   /// and registering the GID>SID association
-  SID updateSpeciesContents(const GENOME &g, Node_ptr s,
-                            const DCCache &cache,
-                            const SpeciesContribution &ctb) {
+  std::pair<SID, UDATA*>
+  updateSpeciesContents(const GENOME &g, Node_ptr s,
+                        const DCCache &cache,
+                        const SpeciesContribution &ctb) {
 
-    insertInto(_step, g, s, cache, _callbacks);
+    UDATA *userData = insertInto(_step, g, s, cache, _callbacks);
     if (!ctb.empty()) updateContributions(s, ctb);
     _idToSpecies.insert(g.crossoverData().id, s->id());
-    return s->id();
+    return std::make_pair(s->id(), userData);
   }
 
   /// Update species \p s contributions with the provided values

@@ -401,8 +401,10 @@ struct PTGraphBuilder {
 
   /// Parse the \p pt PTree and build the associated graph complete with nodes,
   /// paths and legend
-  template <typename GENOME>
-  static void fillScene (const phylogeny::PhylogenicTree<GENOME> &pt, Cache &cache) {
+  template <typename GENOME, typename UDATA>
+  static void fillScene (const phylogeny::PhylogenicTree<GENOME, UDATA> &pt,
+                         Cache &cache) {
+
     cache.items.border = new Border(cache.tree, cache.time);
     cache.items.scene->addItem(cache.items.border);
 

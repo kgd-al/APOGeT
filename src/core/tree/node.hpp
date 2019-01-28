@@ -14,13 +14,37 @@
 namespace phylogeny {
 
 /// Species node
-template <typename GENOME>
+template <typename GENOME, typename UDATA>
 struct Node {
   /// Helper alias to the type used for a pointer to node
   using Ptr = std::shared_ptr<Node>;
 
   /// Helper alias to a collection of nodes
   using Collection = enumvector<SID, Ptr>;
+
+  /// Stores the data relative to an enveloppe point
+  struct EnvPoint {
+    GENOME genome;  ///< The genome for this representant
+    std::unique_ptr<UDATA> userData; ///< Associated user managed statistics
+
+    /// Creates the enveloppe point for genome \p g and default-initialize
+    /// the associated user data
+    static EnvPoint make (const GENOME &g) {
+      return { g, std::make_unique<UDATA>() };
+    }
+
+    /// Serialize enveloppe point \p p into a json
+    friend void to_json (json &j, const typename Node::EnvPoint &p) {
+      j = { p.genome, *p.userData };
+    }
+
+    /// Deserialize enveloppe point \p p from a json
+    friend void from_json (const json &j, typename Node::EnvPoint &p) {
+      p.genome = j[0].get<GENOME>();
+      p.userData = std::make_unique<UDATA>();
+      *p.userData = j[1].get<UDATA>();
+    }
+  };
 
 private:
   /// Prevents constructor access from outside the class
@@ -39,7 +63,7 @@ public:
   Contributors contributors;
 
   /// Collection of borderoids (in opposition to centroids)
-  std::vector<GENOME> enveloppe;
+  std::vector<EnvPoint> enveloppe;
 
   /// Cache map for the intra-enveloppe distances
   _details::DistanceMap distances;
@@ -72,6 +96,16 @@ public:
   /// \returns the subspecies at index \p i
   auto& child (size_t i) {
     return _children[i];
+  }
+
+  /// \returns the genome of enveloppe point \p i
+  auto enveloppePointGenome (uint i) const {
+    return enveloppe[i].genome;
+  }
+
+  /// \returns the genetic identificator for enveloppe point \p i
+  auto enveloppePointId (uint i) const {
+    return enveloppePointGenome(i).crossoverData().id;
   }
 
   /// Adds subspecies \p child to this node
@@ -117,7 +151,7 @@ public:
     while ((p = p->_parent))  spacing += "  ";
 
     os << spacing << "[" << n.id << "] ( ";
-    for (const GENOME &g: n.enveloppe)    os << g.id() << " ";
+    for (const EnvPoint &p: n.enveloppe)    os << p.genome.id() << " ";
     os << ")\n";
 
     for (const Ptr &ss: n._children)  os << *ss.get();
