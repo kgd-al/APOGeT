@@ -30,7 +30,7 @@ struct Node {
     /// Creates the enveloppe point for genome \p g and default-initialize
     /// the associated user data
     static EnvPoint make (const GENOME &g) {
-      return { g, std::make_unique<UDATA>() };
+      return { g, std::make_unique<UDATA>(g.crossoverData().id) };
     }
 
     /// Serialize enveloppe point \p p into a json
@@ -41,7 +41,7 @@ struct Node {
     /// Deserialize enveloppe point \p p from a json
     friend void from_json (const json &j, typename Node::EnvPoint &p) {
       p.genome = j[0].get<GENOME>();
-      p.userData = std::make_unique<UDATA>();
+      p.userData = std::make_unique<UDATA>(genotype::BOCData::INVALID_GID);
       *p.userData = j[1].get<UDATA>();
     }
   };

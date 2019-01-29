@@ -23,8 +23,10 @@
 
 namespace phylogeny {
 
-/// Placeholder for end-users not requiering additional phylogenic infomrations
+/// Placeholder for end-users not requiering additional phylogenic informations
 struct NoUserData {
+  NoUserData (void) {}  ///< Default constructor for nlohmann::json
+  NoUserData (GID) {}   ///< Discards provided id
   void removedFromEnveloppe (void) const {} ///< Nothing to do
   friend void to_json (json&, const NoUserData&) {}  ///< Nothing to store
   friend void from_json (const json&, NoUserData&) {}  ///< Nothing to read
@@ -599,7 +601,7 @@ protected:
 
         ep.userData->removedFromEnveloppe();
         userData = ep.userData.get();
-        *ep.userData = UDATA();
+        *ep.userData = UDATA(ep_id);
 
         ep.genome = g;
         for (uint i=0; i<k; i++)
