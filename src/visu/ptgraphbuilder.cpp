@@ -343,6 +343,9 @@ Contributors::PathID Contributors::pathID (const QPainterPath &p) {
 }
 
 void Contributors::addOrUpdate (const QPainterPath &p, float w) {
+  if (p.pointAtPercent(0) == p.pointAtPercent(1))
+    return;
+
   auto id = pathID(p);
   auto pit = paths.find(id);
   if (pit == paths.end())
