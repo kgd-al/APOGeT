@@ -7,6 +7,8 @@
 
 #include "kgd/external/json.hpp"
 
+#include "kgd/utils/functions.h"
+
 #include "kgd/genotype/selfawaregenome.hpp"
 
 /*!
@@ -26,13 +28,13 @@ class BOCData : public SelfAwareGenome<BOCData> {
 
   /// The compatibility function. Two halves of an unnormalized gaussian.
   static double gaussoid (double d, double mu, double sigma) {
-    return exp(-((d-mu)*(d-mu)/(2.*sigma*sigma)));
+    return utils::gauss(d, mu, sigma);
   }
 
   /// The inverse compatibility function. Returns the distances for this
   ///  compatibility value
   static double gaussoid_inverse (double c, double mu, double sigma, int sign) {
-    return std::max(0., mu + sign * sqrt(-2 * sigma * sigma * log(c)));
+    return std::max(0., utils::gauss_inverse(c, mu, sigma, sign));
   }
 
   /// Genetic distance that maximises reproduction compatibility
