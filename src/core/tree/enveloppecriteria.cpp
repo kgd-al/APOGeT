@@ -274,7 +274,7 @@ EnveloppeContribution computeContribution (const DistanceMap &edist,
                                            const std::vector<float> &gdist,
                                            GID gid, const std::vector<GID> &ids) {
   auto f = computeContribution;
-  switch (Config::ENV_CRIT()) {
+  switch (Config::DEBUG_ENV_CRIT()) {
   case 0: f = maxAverage;           break;
   case 1: f = maxMinDist;           break;
   case 2: f = maxAvgMinStdDev;      break;

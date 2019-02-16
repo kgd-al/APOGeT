@@ -35,10 +35,10 @@ struct CFILE : public ConfigFile<CFILE> {
   DECLARE_PARAMETER(bool, winningPathOnly)
 
   /// (Debug) selector for the species matching score computing type
-  DECLARE_DEBUG_PARAMETER(bool, FULL_CONTINUOUS, true)
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_FULL_CONTINUOUS, true)
 
   /// (Debug) selector for the enveloppe criteria
-  DECLARE_DEBUG_PARAMETER(int, ENV_CRIT, 0)
+  DECLARE_DEBUG_PARAMETER(int, DEBUG_ENV_CRIT, 0)
 
   /// How much debug information should be printed out
   DECLARE_DEBUG_PARAMETER(uint, DEBUG_LEVEL, 0)

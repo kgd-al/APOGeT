@@ -398,7 +398,7 @@ protected:
   static float speciesMatchingScore (const GENOME &g, Node_ptr species,
                                      DCCache &dccache) {
     auto f =
-      Config::FULL_CONTINUOUS() ?
+      Config::DEBUG_FULL_CONTINUOUS() ?
           speciesMatchingScoreContinuous
         : speciesMatchingScoreSimicontinuous;
     return f(g, species, dccache);
