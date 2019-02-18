@@ -74,8 +74,9 @@ public:
   /// Create an empty PTree
   PhylogenicTree(void) {
     _nextNodeID = SID(0);
+    _enveloppeSize = Config::enveloppeSize();
+    _stillborns = 0;
     _step = 0;
-    _hybrids = 0;
     _root = nullptr;
     _callbacks = nullptr;
   }
@@ -141,6 +142,9 @@ public:
     for (SID sid: aliveSpecies)
       nodeAt(sid)->data.lastAppearance = step;
     _step = step;
+
+    if ((_step % Config::stillbornTrimmingPeriod()) == 0)
+      performStillbornTrimming(); /// TODO Implement
 
     // Potentially notify outside world
     if (_callbacks) _callbacks->onStepped(step, aliveSpecies);
@@ -299,7 +303,7 @@ protected:
   /// The PTree root. Null until the first genome is inserted
   Node_ptr _root;
 
-  /// Nodes linear collection for direct access
+  /// Nodes collection for logarithmic access
   Nodes _nodes;
 
   /// Genome to species lookup table
@@ -308,7 +312,8 @@ protected:
   /// Pointer to the callbacks object. Null by default
   mutable Callbacks *_callbacks;
 
-  uint _hybrids;  ///< Number of hybrids encountered thus far \todo WIP
+  uint _enveloppeSize;  ///< Number of enveloppe points
+  uint _stillborns; ///< Number of stillborn species removed
   uint _step; ///< Current timestep for this tree
 
   /// Create a smart pointer to a node created on-the-fly with contributors
@@ -328,7 +333,7 @@ protected:
     assert(p->contributors.getNodeID()
            == SID(std::underlying_type<SID>::type(_nextNodeID)-1));
 
-    _nodes.push_back(p);
+    _nodes[p->id()] = p;
 
     // Compute parent
     p->update(contrib, _nodes);
@@ -550,8 +555,8 @@ protected:
   /// Callbacks:
   ///   - Callbacks_t::onGenomeEntersEnveloppe
   ///   - Callbacks_t::onGenomeLeavesEnveloppe
-  friend UDATA* insertInto (uint step, const GENOME &g, Node_ptr species,
-                            const DCCache &dccache, Callbacks *callbacks) {
+  UDATA* insertInto (uint step, const GENOME &g, Node_ptr species,
+                     const DCCache &dccache, Callbacks *callbacks) {
 
     using op = _details::DistanceMap::key_type;
     const uint k = species->enveloppe.size();
@@ -561,7 +566,7 @@ protected:
     UDATA *userData = nullptr;
 
     // Populate the enveloppe
-    if (k < Config::enveloppeSize()) {
+    if (k < _enveloppeSize) {
       if (debug())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
       species->enveloppe.push_back(Node::EnvPoint::make(g));
@@ -572,7 +577,7 @@ protected:
 
     // Better enveloppe point ?
     } else {
-      assert(k == Config::enveloppeSize());
+      assert(k == _enveloppeSize);
       std::vector<GID> ids (k);
       for (uint i=0; i<k; i++)  ids[i] = species->enveloppePointId(i);
       _details::EnveloppeContribution ec =
@@ -640,10 +645,6 @@ protected:
     assert(s->id() == SID(0) || oldMC || contrib.empty());
 
     if (oldMC != newMC) {
-      /// \todo remove
-      if (!oldMC || !newMC)
-        s->update({}, _nodes);
-
       assert(newMC);
 
       // Parent changed. Update and notify
@@ -667,7 +668,8 @@ protected:
   /// Triggers a tree-wide update of all contributors elligibility
   /// \todo remove test
   void updateElligibilities (void) {
-    for (Node_ptr &n: _nodes) {
+    for (auto &p: _nodes) {
+      Node_ptr &n = p.second;
       Node *oldMC = n->parent(),
            *newMC = n->updateElligibilities(_nodes);
 
@@ -680,7 +682,8 @@ protected:
 #ifndef NDEBUG
   /// Debug function
   void checkMC (void) {
-    for (Node_ptr &n: _nodes) {
+    for (auto &p: _nodes) {
+      Node_ptr &n = p.second;
       if (!n->parent()) {
         if (n->id() != SID(0))
           throw std::logic_error("Parent-less node is not valid (i.e. not 0)");
@@ -694,6 +697,45 @@ protected:
   }
 #endif
 
+  /// Delete species with an underfilled enveloppe to limit clutter
+  void performStillbornTrimming (void) {
+    static const auto &T = Config::stillbornTrimmingThreshold();
+    static const auto &D = Config::stillbornTrimmingDelay();
+    static const float MD = Config::stillbornTrimmingMinDelay();
+
+    bool remove = true;
+    for (auto it = _nodes.begin(); it != _nodes.end();
+         remove ? it = _nodes.erase(it) : ++it ) {
+
+      Node &s = *it->second;
+      remove = false;
+
+      // Ignore non-leaf nodes
+      if (!s.children().empty())
+        continue;
+
+      bool underfilled = (s.enveloppe.size() < T * _enveloppeSize);
+      uint liveTime = s.data.lastAppearance - s.data.firstAppearance;
+      uint deadTime = _step - s.data.lastAppearance;
+      if (underfilled && std::max(MD, liveTime * D) < deadTime) {
+        if (Config::DEBUG_STILLBORNS()) {
+          std::cerr << "Removing species " << s.id() << " with enveloppe size of "
+                    << s.enveloppe.size() << " / " << _enveloppeSize << " ("
+                    << 100. * s.enveloppe.size() / _enveloppeSize << "%) and "
+                    << "survival time of " << " max(" << MD << ", " << D << " * ("
+                    << s.data.lastAppearance << " - " << s.data.firstAppearance
+                    << ")) = " << std::max(MD, D * liveTime) << " < " << deadTime
+                    << " = " << _step << " - " << s.data.lastAppearance
+                    << std::endl;
+        }
+
+        if (s.parent()) s.parent()->delChild(it->second);  // Erase from parent
+        _stillborns++;
+        remove = true;
+      }
+    }
+  }
+
 // =============================================================================
 // == Json conversion
 
@@ -704,7 +746,7 @@ private:
     Contributors c (j["id"], j["contribs"]);
     Node_ptr n = Node::make_shared(c);
 
-    _nodes.push_back(n);
+    _nodes[n->id()] = n;
 
     n->data = j["data"];
     n->enveloppe = j["envlp"].get<decltype(Node::enveloppe)>();
@@ -744,24 +786,25 @@ public:
 
   /// Serialise PTree \p pt into a json
   friend void to_json (json &j, const PhylogenicTree &pt) {
-    j = {"phylogenic tree", pt._step, toJson(*pt._root)};
+    j = {"phylogenic tree", pt._step, pt._enveloppeSize, toJson(*pt._root)};
   }
 
   /// Deserialise PTree \p pt from json \p j
   friend void from_json (const json &j, PhylogenicTree &pt) {
     uint i=1;
     pt._step = j[i++];
+    pt._enveloppeSize = j[i++];
+    if (Config::enveloppeSize() != pt._enveloppeSize)
+      utils::doThrow<std::invalid_argument>(
+        "Current configuration file specifies an enveloppe size of ",
+        Config::enveloppeSize(), " whereas the provided PTree was built with ",
+        pt._enveloppeSize);
+
     pt._root = pt.rebuildHierarchy(j[i++]);
 
-    // Re-order according to species identificator
-    std::sort(pt._nodes.begin(), pt._nodes.end(),
-              [] (const Node_ptr &lhs, const Node_ptr &rhs) {
-      return lhs->id() < rhs->id();
-    });
-
     // Ensure correct parenting
-    for (Node_ptr &n: pt._nodes)
-      pt.updateContributions(n, {}, true);
+    for (auto &n: pt._nodes)
+      pt.updateContributions(n.second, {}, true);
 
 #ifndef NDEBUG
     pt.checkMC();

@@ -7,7 +7,6 @@
  * Contains the definition for a single species node in the phylogenic tree
  */
 
-#include "enumvector.hpp"
 #include "speciesdata.hpp"
 #include "speciescontributors.h"
 
@@ -20,7 +19,7 @@ struct Node {
   using Ptr = std::shared_ptr<Node>;
 
   /// Helper alias to a collection of nodes
-  using Collection = enumvector<SID, Ptr>;
+  using Collection = std::map<SID, Ptr>;
 
   /// Stores the data relative to an enveloppe point
   struct EnvPoint {
@@ -171,7 +170,7 @@ public:
 private:
   /// Updates the parent with the, possibily null, species identified by \p sid
   Node* updateParent(SID sid, const Collection &nodes) {
-    return _parent = (sid == SID::INVALID) ? nullptr : nodes[sid].get();
+    return _parent = (sid == SID::INVALID) ? nullptr : nodes.at(sid).get();
   }
 };
 

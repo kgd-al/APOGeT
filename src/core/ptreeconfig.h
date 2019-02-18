@@ -34,6 +34,18 @@ struct CFILE : public ConfigFile<CFILE> {
   /// Whether to bother drawing extinct paths
   DECLARE_PARAMETER(bool, winningPathOnly)
 
+  /// How often to perform the stillborn garbage collection
+  DECLARE_PARAMETER(uint, stillbornTrimmingPeriod)
+
+  /// How much of the enveloppe should be filled to count as a regular species
+  DECLARE_PARAMETER(float, stillbornTrimmingThreshold)
+
+  /// How long to wait for a stillborn to gain new individuals
+  DECLARE_PARAMETER(float, stillbornTrimmingDelay)
+
+  /// How long to wait for before considering trimming a species
+  DECLARE_PARAMETER(uint, stillbornTrimmingMinDelay)
+
   /// (Debug) selector for the species matching score computing type
   DECLARE_DEBUG_PARAMETER(bool, DEBUG_FULL_CONTINUOUS, true)
 
@@ -54,6 +66,9 @@ struct CFILE : public ConfigFile<CFILE> {
 
   /// Should debug info about the idToSpecies map be printed out ?
   DECLARE_DEBUG_PARAMETER(bool, DEBUG_ID2SPECIES, 0)
+
+  /// Should debug info about the stillborn trimming be printed out ?
+  DECLARE_DEBUG_PARAMETER(bool, DEBUG_STILLBORNS, 0)
 };
 #undef CFILE
 

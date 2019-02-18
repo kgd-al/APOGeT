@@ -167,8 +167,14 @@ public:
   /// contributor of species \p lhs
   template <typename T>
   static bool elligibile (SID lhs, SID rhs, const T &nodes) {
-    auto n = nodes.at(lhs).get(),
-         p = nodes.at(rhs).get();
+    auto n = nodes.at(lhs).get();
+
+    // If the node has been removed then ignore it
+    auto pit = nodes.find(rhs);
+    if (pit == nodes.end())
+      return false;
+
+    auto p = pit->second.get();
 
     // Do not allow younger species to serve as parent (would be quite ugly and
     // is probably wrong anyway)
