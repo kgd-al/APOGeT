@@ -425,51 +425,63 @@ void Contributors::show (SID sid, const GUIItems &items,
   for (auto &c: contribs)
     if (c.speciesID() != sid)  totalWidth += c.count();
 
+  uint unaccounted = 0;
+
   // Start parsing individual contributions
   for (auto &c: contribs) {
     if (c.speciesID() == sid) continue;
 
     float w = c.count() / totalWidth;
     Node *nc = items.nodes.value(c.speciesID());
+    if (nc) {
+      // Store label
+      QPoint labelPos = nc->scenePos().toPoint();
+      labelPos.setX(labelPos.x() + .025*R);
+      QString label = QString::number(100 * w, 'f', 2) + "%";
+      labels.append(QPair<QPointF, QString>(labelPos, label));
 
-    // Store label
-    QPoint labelPos = nc->scenePos().toPoint();
+      Node *n_ = nullptr; // iterator
+
+      // Find path from contributor to common ancestor
+      n_ = nc;
+      Node *ca = nc;
+      auto it = std::find(np.begin(), np.end(), n_);
+      while (it == np.end()) {  // Common ancestor not found
+        it = std::find(np.begin(), np.end(), n_->parent);
+        makePath(n_, w, it == np.end());
+
+        ca = n_;
+        n_ = n_->parent;
+        assert(n_);
+      }
+      assert(ca);
+
+      Node *commonAncestor = n_;
+
+      // Find path from node to common ancestor
+      n_ = n;
+      Node *na = n;
+      while (n_ != commonAncestor) {
+        makePath(n_, w, n_->parent != commonAncestor);
+
+        na = n_;
+        n_ = n_->parent;
+        assert(n_);
+      }
+      assert(na);
+
+      // Connect paths
+      verticalPath(ca, na, w);
+    } else
+      unaccounted += c.count();
+  }
+
+  if (unaccounted > 0) {
+    QPoint labelPos = n->scenePos().toPoint();
     labelPos.setX(labelPos.x() + .025*R);
-    QString label = QString::number(100 * w, 'f', 2) + "%";
+    QString label = QString::number(100. * unaccounted / totalWidth, 'f', 2)
+                    + "% unaccounted";
     labels.append(QPair<QPointF, QString>(labelPos, label));
-
-    Node *n_ = nullptr; // iterator
-
-    // Find path from contributor to common ancestor
-    n_ = nc;
-    Node *ca = nc;
-    auto it = std::find(np.begin(), np.end(), n_);
-    while (it == np.end()) {  // Common ancestor not found
-      it = std::find(np.begin(), np.end(), n_->parent);
-      makePath(n_, w, it == np.end());
-
-      ca = n_;
-      n_ = n_->parent;
-      assert(n_);
-    }
-    assert(ca);
-
-    Node *commonAncestor = n_;
-
-    // Find path from node to common ancestor
-    n_ = n;
-    Node *na = n;
-    while (n_ != commonAncestor) {
-      makePath(n_, w, n_->parent != commonAncestor);
-
-      na = n_;
-      n_ = n_->parent;
-      assert(n_);
-    }
-    assert(na);
-
-    // Connect paths
-    verticalPath(ca, na, w);
   }
 
   QGraphicsItem::show();

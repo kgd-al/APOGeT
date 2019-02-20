@@ -143,8 +143,8 @@ public:
       nodeAt(sid)->data.lastAppearance = step;
     _step = step;
 
-    if ((_step % Config::stillbornTrimmingPeriod()) == 0)
-      performStillbornTrimming(); /// TODO Implement
+    static const auto &T = Config::stillbornTrimmingPeriod();
+    if ((T > 0) && (_step % T) == 0)  performStillbornTrimming();
 
     // Potentially notify outside world
     if (_callbacks) _callbacks->onStepped(step, aliveSpecies);
@@ -740,6 +740,26 @@ protected:
 // == Json conversion
 
 private:
+  /// Serialize Node \p n into a json
+  static json toJson (const Node &n) {
+    json j, jd, jc;
+
+    for (const auto &d: n.distances)
+      jd.push_back({d.first.first, d.first.second, d.second});
+
+    for (const auto &c: n.children())
+      jc.push_back(toJson(*c));
+
+    j["id"] = n.id();
+    j["data"] = n.data;
+    j["envlp"] = n.enveloppe;
+    j["contribs"] = n.contributors.data();
+    j["dists"] = jd;
+    j["children"] = jc;
+
+    return j;
+  }
+
   /// Rebuilds PTree hierarchy and internal structure based on the contents of
   /// json \p j
   Node_ptr rebuildHierarchy(const json &j) {
@@ -764,43 +784,27 @@ private:
   }
 
 public:
-  /// Serialize Node \p n into a json
-  static json toJson (const Node &n) {
-    json j, jd, jc;
-
-    for (const auto &d: n.distances)
-      jd.push_back({d.first.first, d.first.second, d.second});
-
-    for (const auto &c: n.children())
-      jc.push_back(toJson(*c));
-
-    j["id"] = n.id();
-    j["data"] = n.data;
-    j["envlp"] = n.enveloppe;
-    j["contribs"] = n.contributors.data();
-    j["dists"] = jd;
-    j["children"] = jc;
-
-    return j;
-  }
 
   /// Serialise PTree \p pt into a json
   friend void to_json (json &j, const PhylogenicTree &pt) {
-    j = {"phylogenic tree", pt._step, pt._enveloppeSize, toJson(*pt._root)};
+    j["_step"] = pt._step;
+    j["_envSize"] = pt._enveloppeSize;
+    j["_stillborns"] = pt._stillborns;
+    j["tree"] = toJson(*pt._root);
   }
 
   /// Deserialise PTree \p pt from json \p j
   friend void from_json (const json &j, PhylogenicTree &pt) {
-    uint i=1;
-    pt._step = j[i++];
-    pt._enveloppeSize = j[i++];
+    pt._step = j["_step"];
+    pt._stillborns = j["_stillborns"];
+    pt._enveloppeSize = j["_envSize"];
     if (Config::enveloppeSize() != pt._enveloppeSize)
       utils::doThrow<std::invalid_argument>(
         "Current configuration file specifies an enveloppe size of ",
         Config::enveloppeSize(), " whereas the provided PTree was built with ",
         pt._enveloppeSize);
 
-    pt._root = pt.rebuildHierarchy(j[i++]);
+    pt._root = pt.rebuildHierarchy(j["tree"]);
 
     // Ensure correct parenting
     for (auto &n: pt._nodes)
