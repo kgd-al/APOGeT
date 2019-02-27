@@ -19,5 +19,5 @@ struct Genome {
 /// main for a straightforward executable that can display any PTree
 /// by throwing genetic information away
 int main(int argc, char *argv[]) {
-  return run<Genome, config::PTree>(argc, argv);
+  return run<Genome, phylogeny::NoUserData>(argc, argv);
 }

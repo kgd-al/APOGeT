@@ -23,9 +23,12 @@ struct SpeciesData {
   /// Number of individuals of the species observed
   uint count;
 
+  /// Number of individuals of this species currently in the simulation
+  uint currentlyAlive;
+
   /// Serialize to json
   friend void to_json (json &j, const SpeciesData &d) {
-    j = {d.firstAppearance, d.lastAppearance, d.count};
+    j = {d.firstAppearance, d.lastAppearance, d.count, d.currentlyAlive};
   }
 
   /// Deserialize from json
@@ -34,6 +37,7 @@ struct SpeciesData {
     d.firstAppearance = j[i++];
     d.lastAppearance = j[i++];
     d.count = j[i++];
+    d.currentlyAlive = j[i++];
   }
 };
 

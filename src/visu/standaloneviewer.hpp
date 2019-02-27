@@ -9,10 +9,10 @@
 
 #include "phylogenyviewer.h"
 
-template <typename GENOME, typename CONFIG>
+template <typename GENOME, typename UDATA>
 int run(int argc, char *argv[]) {
-  using PTree = phylogeny::PhylogenicTree<GENOME>;
-  using PViewer = gui::PhylogenyViewer<GENOME>;
+  using PTree = phylogeny::PhylogenicTree<GENOME, UDATA>;
+  using PViewer = gui::PhylogenyViewer<GENOME, UDATA>;
   using Verbosity = config::Verbosity;
 
   cxxopts::Options options("PTreeViewer", "Loads and displays a phenotypic tree for \""
@@ -47,7 +47,7 @@ int run(int argc, char *argv[]) {
   Verbosity verbosity = Verbosity::SHOW;
   if (result.count("verbosity")) verbosity = result["verbosity"].as<Verbosity>();
 
-  CONFIG::setupConfig(configFile, verbosity);
+  config::PTree::setupConfig(configFile, verbosity);
 
   auto config = PViewer::defaultConfig();
 
@@ -61,7 +61,7 @@ int run(int argc, char *argv[]) {
   QApplication a(argc, argv);
   setlocale(LC_NUMERIC,"C");
 
-  PTree pt = nlohmann::json::parse(utils::readAll(result["tree"].as<std::string>()));
+  PTree pt = PTree::readFrom(result["tree"].as<std::string>(), false);
   PViewer pv (nullptr, pt, QBoxLayout::LeftToRight, config);
 
   if (outfile.isEmpty()) {

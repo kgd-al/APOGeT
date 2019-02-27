@@ -107,6 +107,11 @@ public:
     return enveloppePointGenome(i).crossoverData().id;
   }
 
+  /// \returns whether this species still has some members in the simulation
+  bool extinct (void) const {
+    return data.currentlyAlive == 0;
+  }
+
   /// Adds subspecies \p child to this node
   void addChild (Ptr child) {
     _children.push_back(child);

@@ -112,8 +112,13 @@ public:
   /// Recompute all cached data
   void invalidate (const QPointF &newPos);
 
-  /// Recompute data stored in the tooltip
-  void updateTooltip(void);
+  /// Format species data for use in the tooltip
+  QString computeTooltip (void) const;
+
+  /// \see computeTooltip
+  void updateTooltip(void) {
+    setToolTip(computeTooltip());
+  }
 
   /// Recompute personnal scale
   void autoscale (void);
@@ -172,6 +177,9 @@ public:
 
   /// Triggers a callback when this species node is no longer hovered
   void hoverLeaveEvent(QGraphicsSceneHoverEvent*) override;
+
+  /// Requests display of the species details
+  void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override;
 
   /// \returns this graphics item bounding box
   QRectF boundingRect(void) const override;

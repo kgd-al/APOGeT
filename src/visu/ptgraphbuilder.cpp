@@ -142,7 +142,7 @@ void Node::invalidate(const QPointF &newPos) {
   timeline->invalidatePath();
 }
 
-void Node::updateTooltip (void) {
+QString Node::computeTooltip (void) const {
   QString tooltip;
   QTextStream qss (&tooltip);
   qss << "Node " << std::underlying_type<SID>::type(id) << "\n"
@@ -153,7 +153,7 @@ void Node::updateTooltip (void) {
         << "\n"
       << data.count << " individuals\n"
       << children << " subspecies";
-  setToolTip(tooltip);
+  return tooltip;
 }
 
 void Node::autoscale(void) {
@@ -208,6 +208,10 @@ void Node::hoverEnterEvent(QGraphicsSceneHoverEvent*) {
 /// Triggers a callback when this species node is no longer hovered
 void Node::hoverLeaveEvent(QGraphicsSceneHoverEvent*) {
   treeBase->hoverEvent(id, false);
+}
+
+void Node::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) {
+  treeBase->doubleClickEvent(*this, e);
 }
 
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {

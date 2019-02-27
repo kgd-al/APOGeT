@@ -274,6 +274,9 @@ template <> struct SAG_CONFIG_FILE(BOCData) {
 
   /// Mutation rates for the BOCData fields
   DECLARE_PARAMETER(MutationRates, mutationRates)
+
+  /// Distance weights for the BOCData fields
+  DECLARE_PARAMETER(DistanceWeights, distanceWeights)
 };
 
 /// Specialization for the sex field which is not included in the distances

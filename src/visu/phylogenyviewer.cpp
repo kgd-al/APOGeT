@@ -1,10 +1,12 @@
 #include <QGraphicsItem>
+#include <QGraphicsSceneMouseEvent>
 #include <QStack>
 
 #include <QToolBar>
 #include <QLabel>
 #include <QSlider>
 #include <QCheckBox>
+#include <QListWidget>
 
 #include <QStyle>
 #include <QStylePainter>
@@ -274,6 +276,25 @@ void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC
 // ============================================================================
 // == User requests
 // ============================================================================
+
+void PhylogenyViewer_base::speciesDetailPopup (SID id, QStringList data,
+                                               QGraphicsSceneMouseEvent *e) {
+  QDialog *dialog = new QDialog (this);
+    QVBoxLayout *layout = new QVBoxLayout;
+      QLabel *generalLabel = new QLabel (data.takeFirst());
+      QListWidget *listLabel = new QListWidget;
+
+    layout->addWidget(generalLabel);
+      listLabel->setFlow(QListWidget::LeftToRight);
+      listLabel->insertItems(0, data);
+    layout->addWidget(listLabel);
+  dialog->setLayout(layout);
+
+  dialog->setWindowTitle(QString("Details of species ")
+                       + QString::number(std::underlying_type<SID>::type(id)));
+  dialog->move(e->screenPos());
+  dialog->show();
+}
 
 void PhylogenyViewer_base::renderTo (QString filename) {
   Node *hovered = nullptr;

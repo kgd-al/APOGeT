@@ -39,7 +39,9 @@ struct NoUserData {
 /// \tparam GENOME the genome of the observed individuals.
 /// \tparam UDATA user data for collecting sample statistics at the individual
 /// level (defaults to nothing)
-template <typename GENOME, typename UDATA = NoUserData>
+///
+/// FIXME At least once, _idToSpecies.at(foo) throws even though _idToSpecies.contains(foo) == true
+template <typename GENOME, typename UDATA>
 class PhylogenicTree {
   /// Helper lambda for debug printing
   static constexpr auto debug = [] {
@@ -105,7 +107,8 @@ public:
   /// \return the user data for enveloppe point \p gid or nullptr if it is a
   /// regular individual
   UDATA* getUserData (GID id) const {
-    const auto &species = _nodes.at(_idToSpecies.at(id));
+    auto sid = _idToSpecies.at(id);
+    const auto &species = _nodes.at(sid);
     for (const auto &ep: species->enveloppe)
       if (ep.genome.crossoverData().id == id)
         return ep.userData.get();
@@ -132,7 +135,6 @@ public:
   /// \tparam F Functor for extracting the genome id from an iterator
   template <typename IT, typename F>
   void step (uint step, IT begin, IT end, F geneticID) {
-
     // Determine which species are still alive
     LivingSet aliveSpecies;
     for (IT it = begin; it != end; ++it)
@@ -192,7 +194,9 @@ public:
     if (debug())
       std::cerr << "New last appearance of species " << sid << " is " << _step << std::endl;
 
-    nodeAt(sid)->data.lastAppearance = _step;
+    SpeciesData &data = nodeAt(sid)->data;
+    data.lastAppearance = _step;
+    data.currentlyAlive--;
     return sid;
   }
 
@@ -232,10 +236,23 @@ protected:
     struct ITSMData {
       SID species;    ///< The species
       uint refCount;  ///< The current number of users of this data
+
+      /// Serializes an item into a json
+      friend void to_json (json &j, const ITSMData &d) {
+        j = { d.species, d.refCount };
+      }
+
+      /// Deserializes an item from a json
+      friend void from_json (const json &j, ITSMData &d) {
+        d.species = j[0], d.refCount = j[1];
+      }
     };
 
+    /// Helper alias to the type of the underlying container
+    using map_t = std::map<GID, ITSMData>;
+
     /// Internal container
-    std::map<GID, ITSMData> map;
+    map_t map;
 
     /// \return the size of the lookup table
     uint size (void) const {
@@ -286,7 +303,11 @@ protected:
       ITSMData d;
       d.refCount = 1;
       d.species = sid;
-      map[gid] = d;
+
+      auto res = map.try_emplace(gid, d);
+      if (!res.second)
+        utils::doThrow<std::logic_error>("Unable to register GID(", gid,
+                                         ")>SID(", sid, ") association!");
 
       if (config::PTree::DEBUG_ID2SPECIES())
         std::cerr << "Inserted a reference to " << gid
@@ -297,6 +318,21 @@ protected:
     /// \throws std::out_of_range if gid &notin; map
     SID at (GID gid) const {
       return map.at(gid).species;
+    }
+
+    /// \return Whether or not \p gid is associated to a species
+    bool contains (GID gid) const {
+      return map.find(gid) != map.end();
+    }
+
+    /// Serialize the underlying map into a json
+    friend void to_json (json &j, const IdToSpeciesMap &m) {
+      j = m.map;
+    }
+
+    /// Deserialize the underlying map from a json
+    friend void from_json (const json &j, IdToSpeciesMap &m) {
+      m.map = j.get<map_t>();
     }
   };
 
@@ -329,6 +365,7 @@ protected:
     p->data.firstAppearance = _step;
     p->data.lastAppearance = _step;
     p->data.count = 0;
+    p->data.currentlyAlive = 0;
 
     assert(p->contributors.getNodeID()
            == SID(std::underlying_type<SID>::type(_nextNodeID)-1));
@@ -616,6 +653,7 @@ protected:
     }
 
     species->data.count++;
+    species->data.currentlyAlive++;
     species->data.lastAppearance = step;
 
     return userData;
@@ -711,8 +749,10 @@ protected:
       remove = false;
 
       // Ignore non-leaf nodes
-      if (!s.children().empty())
-        continue;
+      if (!s.children().empty())  continue;
+
+      // Only process dead species
+      if (!s.extinct()) continue;
 
       bool underfilled = (s.enveloppe.size() < T * _enveloppeSize);
       uint liveTime = s.data.lastAppearance - s.data.firstAppearance;
@@ -786,15 +826,23 @@ private:
 public:
 
   /// Serialise PTree \p pt into a json
-  friend void to_json (json &j, const PhylogenicTree &pt) {
+  /// \arg complete Whether to include all data required to resume a simulation
+  /// or only those used in displaying/analysing
+  static void toJson (json &j, const PhylogenicTree &pt, bool complete) {
     j["_step"] = pt._step;
     j["_envSize"] = pt._enveloppeSize;
     j["_stillborns"] = pt._stillborns;
     j["tree"] = toJson(*pt._root);
+    if (complete) {
+      j["nextSID"] = pt._nextNodeID;
+      j["i2s"] = pt._idToSpecies;
+    }
   }
 
   /// Deserialise PTree \p pt from json \p j
-  friend void from_json (const json &j, PhylogenicTree &pt) {
+  /// \arg complete Whether to load all data required to resume a simulation
+  /// or only those used in displaying/analysing.
+  static void fromJson (const json &j, PhylogenicTree &pt, bool complete) {
     pt._step = j["_step"];
     pt._stillborns = j["_stillborns"];
     pt._enveloppeSize = j["_envSize"];
@@ -806,6 +854,11 @@ public:
 
     pt._root = pt.rebuildHierarchy(j["tree"]);
 
+    if (complete) {
+      pt._nextNodeID = j["nextSID"];
+      pt._idToSpecies = j["i2s"].get<IdToSpeciesMap>();
+    }
+
     // Ensure correct parenting
     for (auto &n: pt._nodes)
       pt.updateContributions(n.second, {}, true);
@@ -816,7 +869,7 @@ public:
   }
 
   /// Stores itself at the given location
-  bool saveTo (const std::string &filename) {
+  bool saveTo (const std::string &filename, bool complete = false) const {
     std::ofstream ofs (filename);
     if (!ofs) {
       std::cerr << "Unable to open '" << filename << "' for writing"
@@ -824,19 +877,23 @@ public:
       return false;
     }
 
-    ofs << json(*this).dump(2);
+    json j;
+    toJson(j, *this, complete);
+    ofs << j.dump(2);
     return true;
   }
 
   /// \returns a phylogenic tree rebuilt from data at the given location
-  static PhylogenicTree readFrom (const std::string &filename ) {
+  static PhylogenicTree readFrom (const std::string &filename, bool complete = false) {
     std::ifstream ifs (filename);
     if (!ifs)
       throw std::invalid_argument ("Unable to open '" + filename
                                    + "' for reading");
 
     else {
-      PhylogenicTree pt = json::parse(utils::readAll(filename));
+      PhylogenicTree pt;
+      json j = json::parse(utils::readAll(filename));
+      fromJson(j, pt, complete);
       return pt;
     }
   }

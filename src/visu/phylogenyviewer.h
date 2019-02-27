@@ -127,6 +127,10 @@ public slots:
   /// Requests the scale of the view to be adapted to the size of the scene
   void makeFit (bool autofit);
 
+  /// Pops a detailed view a species node contents up
+  void speciesDetailPopup (SID id, QStringList data,
+                           QGraphicsSceneMouseEvent *e);
+
   /// Prints the current scene to the image file \p filename
   void renderTo (QString filename = "");
 
@@ -143,6 +147,9 @@ public slots:
 
   /// Process a hover event
   virtual void hoverEvent (SID sid, bool entered) = 0;
+
+  /// Process a double click event
+  virtual void doubleClickEvent (const Node &n, QGraphicsSceneMouseEvent *e) = 0;
 
 protected:
   /// The graphics config
@@ -187,7 +194,7 @@ protected:
 /// This class can be used as a standalone (top-level) viewer or be embedded in
 /// any kind of layout. It is possible to control the orientation of the controls
 /// with respect to the main view.
-template <typename GENOME, typename UDATA = phylogeny::NoUserData>
+template <typename GENOME, typename UDATA>
 class PhylogenyViewer : public PhylogenyViewer_base {
 public:
 
@@ -264,6 +271,15 @@ protected:
     emit onSpeciesHoverEvent(sid, entered);
   }
 
+  void doubleClickEvent (const Node &gn, QGraphicsSceneMouseEvent *e) override {
+    const typename PTree::Node &n = *_ptree.nodeAt(gn.id);
+    QStringList data;
+    data.append(gn.computeTooltip());
+    for (const auto &ep: n.enveloppe)
+      data.append(dumpEnveloppePoint(ep));
+    speciesDetailPopup(gn.id, data, e);
+  }
+
 private:
   /// The PTree associated to this view
   const PTree &_ptree;
@@ -273,6 +289,16 @@ private:
 
   void updateLayout (void) override {
     Builder::updateLayout(_items);
+  }
+
+  QString dumpEnveloppePoint (const typename PTree::Node::EnvPoint &ep) {
+    QString s;
+    s += "Genome: ";
+    s += QString::fromStdString(nlohmann::json(ep.genome).dump(2));
+    s += "\nUser data: ";
+    s += QString::fromStdString(nlohmann::json(*ep.userData).dump(2));
+    s += "\n";
+    return s;
   }
 };
 
