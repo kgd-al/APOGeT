@@ -49,11 +49,17 @@ class PhylogenicTree {
   };
 
 public:
+  /// Helper alias to the genome type template parameter
+  using Genome = GENOME;
+
+  /// Helper alias to the genome type template parameter
+  using UserData = UDATA;
+
   /// Helper alias for the Parent enumeration
   using Parent = genotype::BOCData::Parent;
 
   /// Helper alias to a species node
-  using Node = phylogeny::Node<GENOME, UDATA>;
+  using Node = phylogeny::Node<Genome, UserData>;
 
   /// \copydoc Node::Ptr
   using Node_ptr = typename Node::Ptr;
@@ -62,7 +68,7 @@ public:
   using Nodes = typename Node::Collection;
 
   /// Specialization used by this tree. Uses CRTP
-  using Callbacks = Callbacks_t<PhylogenicTree<GENOME, UDATA>>;
+  using Callbacks = Callbacks_t<PhylogenicTree<Genome, UserData>>;
 
   /// Helper alias for the configuration data
   using Config = config::PTree;
@@ -104,13 +110,17 @@ public:
     return _nodes.at(i);
   }
 
+  /// \return the id of the species gid belongs to
+  SID getSpeciesID (GID gid) const {
+    return _idToSpecies.at(gid);
+  }
+
   /// \return the user data for enveloppe point \p gid or nullptr if it is a
   /// regular individual
-  UDATA* getUserData (GID id) const {
-    auto sid = _idToSpecies.at(id);
-    const auto &species = _nodes.at(sid);
+  UserData* getUserData (GID gid) const {
+    const auto &species = _nodes.at(getSpeciesID(gid));
     for (const auto &ep: species->enveloppe)
-      if (ep.genome.crossoverData().id == id)
+      if (ep.genome.crossoverData().id == gid)
         return ep.userData.get();
     return nullptr;
   }
@@ -159,7 +169,7 @@ public:
   /// \return The species \p g was added to and, if it was also added to the
   /// enveloppe, a pointer to the associated user data structure
   /// (nullptr otherwise).
-  std::pair<SID, UDATA*> addGenome (const GENOME &g) {
+  std::pair<SID, UserData*> addGenome (const Genome &g) {
     // Ensure that the root exists
     if (!_root) {
       _root = makeNode(SpeciesContribution{});
@@ -189,7 +199,7 @@ public:
   }
 
   /// Remove \p g from this PTree (and update relevant internal data)
-  SID delGenome (const GENOME &g) {
+  SID delGenome (const Genome &g) {
     auto sid = _idToSpecies.remove(g);
     if (debug())
       std::cerr << "New last appearance of species " << sid << " is " << _step << std::endl;
@@ -263,7 +273,7 @@ protected:
     /// Updates internal reference counter.
     /// \return The species identificator of \p g 's parent \p p or SID::INVALID
     /// if \p g does not have such a parent
-    SID parentSID (const GENOME &g, Parent p) {
+    SID parentSID (const Genome &g, Parent p) {
       if (!g.crossoverData().hasParent(p))  return SID::INVALID;
 
       auto &d = map.at(g.crossoverData().parent(p));
@@ -290,7 +300,7 @@ protected:
     }
 
     /// Try to remove \p g (and its eventual parents) from the association map
-    SID remove (const GENOME &g) {
+    SID remove (const Genome &g) {
       auto sid = remove(g.crossoverData().id);
       for (Parent p: {Parent::MOTHER, Parent::FATHER})
         if (g.crossoverData().hasParent(p))
@@ -390,7 +400,7 @@ protected:
 
   /// \todo remove one
   /// \return Whether \p g is similar enough to \p species
-  static float speciesMatchingScoreSimicontinuous (const GENOME &g,
+  static float speciesMatchingScoreSimicontinuous (const Genome &g,
                                                    Node_ptr species,
                                                    DCCache &dccache) {
     uint k = species->enveloppe.size();
@@ -413,7 +423,7 @@ protected:
 
   /// \todo remove one
   /// \return Whether \p g is similar enough to \p species
-  static float speciesMatchingScoreContinuous (const GENOME &g,
+  static float speciesMatchingScoreContinuous (const Genome &g,
                                                Node_ptr species,
                                                DCCache &dccache) {
     uint k = species->enveloppe.size();
@@ -437,7 +447,7 @@ protected:
   /// \todo remove
   /// Proxy for delegating score computation to the appropriate function
   /// \see Config::FULL_CONTINUOUS
-  static float speciesMatchingScore (const GENOME &g, Node_ptr species,
+  static float speciesMatchingScore (const Genome &g, Node_ptr species,
                                      DCCache &dccache) {
     auto f =
       Config::DEBUG_FULL_CONTINUOUS() ?
@@ -447,7 +457,7 @@ protected:
   }
 
   /// Finds the best derived species amongst the list of parents
-  void findBestDerived (const GENOME &g, std::vector<Node_ptr> species,
+  void findBestDerived (const Genome &g, std::vector<Node_ptr> species,
                         Node_ptr &bestSpecies, float &bestScore,
                         DCCache &bestSpeciesDCCache) {
 
@@ -488,7 +498,7 @@ protected:
   /// Find the appropriate place for \p g in the subtree(s) rooted at
   ///  \p species0 (and species1)
   /// \todo THis function seems ugly and hard to maintain
-  std::pair<SID, UDATA*> addGenome (const GENOME &g,
+  std::pair<SID, UserData*> addGenome (const Genome &g,
                                     Node_ptr species0, Node_ptr species1,
                                     SID sid0, SID sid1) {
 
@@ -592,7 +602,7 @@ protected:
   /// Callbacks:
   ///   - Callbacks_t::onGenomeEntersEnveloppe
   ///   - Callbacks_t::onGenomeLeavesEnveloppe
-  UDATA* insertInto (uint step, const GENOME &g, Node_ptr species,
+  UserData* insertInto (uint step, const Genome &g, Node_ptr species,
                      const DCCache &dccache, Callbacks *callbacks) {
 
     using op = _details::DistanceMap::key_type;
@@ -600,7 +610,7 @@ protected:
 
     auto &dist = species->distances;
 
-    UDATA *userData = nullptr;
+    UserData *userData = nullptr;
 
     // Populate the enveloppe
     if (k < _enveloppeSize) {
@@ -643,7 +653,7 @@ protected:
 
         ep.userData->removedFromEnveloppe();
         userData = ep.userData.get();
-        *ep.userData = UDATA(ep_id);
+        *ep.userData = UserData(ep_id);
 
         ep.genome = g;
         for (uint i=0; i<k; i++)
@@ -661,12 +671,12 @@ protected:
 
   /// Update species \p s by inserting genome \p g, updating the contributions
   /// and registering the GID>SID association
-  std::pair<SID, UDATA*>
-  updateSpeciesContents(const GENOME &g, Node_ptr s,
+  std::pair<SID, UserData*>
+  updateSpeciesContents(const Genome &g, Node_ptr s,
                         const DCCache &cache,
                         const SpeciesContribution &ctb) {
 
-    UDATA *userData = insertInto(_step, g, s, cache, _callbacks);
+    UserData *userData = insertInto(_step, g, s, cache, _callbacks);
     if (!ctb.empty()) updateContributions(s, ctb);
     _idToSpecies.insert(g.crossoverData().id, s->id());
     return std::make_pair(s->id(), userData);

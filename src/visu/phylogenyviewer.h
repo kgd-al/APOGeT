@@ -291,6 +291,7 @@ private:
     Builder::updateLayout(_items);
   }
 
+  /// \returns a description of the data contained by this enveloppe point
   QString dumpEnveloppePoint (const typename PTree::Node::EnvPoint &ep) {
     QString s;
     s += "Genome: ";
@@ -301,6 +302,8 @@ private:
     return s;
   }
 };
+
+
 
 } // end namespace gui
 
