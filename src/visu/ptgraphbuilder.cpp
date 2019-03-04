@@ -37,6 +37,7 @@ static constexpr float END_POINT_SIZE = NODE_RADIUS / 4;
 static constexpr int NODE_SURVIVOR_LEVEL = 11;
 static constexpr int NODE_EXCTINCT_LEVEL = 10;
 
+static constexpr int DIMMER_LEVEL = 0;
 static constexpr int CONTRIBUTORS_LEVEL = 0;
 
 static constexpr int PATHS_LEVEL = -10;
@@ -140,6 +141,7 @@ void Node::invalidate(const QPointF &newPos) {
   setPos(newPos);
   if (path) path->invalidatePath();
   timeline->invalidatePath();
+  update();
 }
 
 QString Node::computeTooltip (void) const {
@@ -251,6 +253,8 @@ void Path::invalidatePath(void) {
 
   _shape.addPath(makeArc(start->scenePos(), end->scenePos()));
   _shape.addEllipse(_shape.pointAtPercent(1), END_POINT_SIZE, END_POINT_SIZE);
+
+  update();
 }
 
 QRectF Path::boundingRect() const {
@@ -302,6 +306,8 @@ void Timeline::invalidatePath(void) {
 
     points[1] = l * QPointF(cos(a), sin(a));
   }
+
+  update();
 }
 
 QPainterPath Timeline::shape (void) const {
@@ -535,6 +541,27 @@ void Contributors::paint (QPainter *painter,
 
   painter->restore();
 }
+
+// ============================================================================
+// == Tree dimmer
+// ============================================================================
+
+Dimmer::Dimmer (VTree tree) : tree(tree) {
+  setZValue(DIMMER_LEVEL);
+}
+
+QRectF Dimmer::boundingRect(void) const {
+  return tree->boundingRect();
+}
+
+void Dimmer::paint (QPainter *painter,
+                          const QStyleOptionGraphicsItem*, QWidget*) {
+  if (dimPath.elementCount() > 0) {
+    painter->setBrush(QColor::fromRgbF(0,0,0,.5));
+    painter->drawPath(dimPath);
+  }
+}
+
 
 // ============================================================================
 // == Graph borders and legends

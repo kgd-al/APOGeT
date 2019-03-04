@@ -17,11 +17,23 @@ namespace gui {
 
 /// User-controlled variations on the base phylogeny viewer
 struct ViewerConfig {
-  uint minSurvival = 0;   ///< Minimal survival a species must have to be shown
-  float minEnveloppe = 0; ///< Minimal enveloppe fullness a species must have to be shown
-  bool showNames = true;  ///< Whether to display nodes
-  bool autofit = true;    ///< Whether to keep the scene fully in view
-  bool screenshots = false; ///< Whether to keep a screenshot per step
+  /// Minimal survival a species must have to be shown
+  uint minSurvival = 0;
+
+  /// Minimal enveloppe fullness a species must have to be shown
+  float minEnveloppe = 0;
+
+  /// Maximal range for survival monitoring
+  uint clippingRange = -1;
+
+  /// Whether to display nodes
+  bool showNames = true;
+
+  /// Whether to keep the scene fully in view
+  bool autofit = true;
+
+  /// Whether to keep a screenshot per step
+  bool screenshots = false;
 };
 
 /// \cond internal
@@ -63,7 +75,8 @@ public:
     SHOW_NAME = 1,
     PARENT = 2,
     MIN_SURVIVAL = 4,
-    MIN_FULLNESS = 8
+    MIN_FULLNESS = 8,
+    CLIP_RANGE = 16
   };
   Q_DECLARE_FLAGS(Visibilities, Visibility)
 
@@ -148,7 +161,8 @@ public:
 
   /// \returns Whether this node has sufficient visiblity values
   bool subtreeVisible (void) const {
-    static constexpr auto mask = (MIN_FULLNESS | MIN_SURVIVAL | PARENT);
+    static constexpr auto mask =
+        (MIN_FULLNESS | MIN_SURVIVAL | CLIP_RANGE | PARENT);
     return (visibilities & mask) == mask;
   }
 
@@ -160,6 +174,16 @@ public:
 
   /// Sets visibility value \p v to \p visible
   void setVisible (Visibility v, bool visible);
+
+  /// \returns the timestep at which this species first appeared
+  uint appearance (void) const {
+    return data.firstAppearance;
+  }
+
+  /// \returns the timestep at which this species last appeared
+  uint disappearance (void) const {
+    return data.lastAppearance;
+  }
 
   /// \returns the number of timestep the associated species has lived for
   uint survival (void) const {
@@ -310,6 +334,30 @@ private:
   void makePath (Node *n, float w, bool vertical);
 };
 
+/// Graphics item dimming out parts of the tree
+struct Dimmer : public QGraphicsItem {
+
+  VTree tree; ///< The tree whose contributions this draws
+
+  /// Path used to dim out parts of the tree
+  QPainterPath dimPath;
+
+  /// Builds a contributors drawer
+  Dimmer (VTree tree);
+
+  /// Sets the path used for dimming out the tree
+  void setDimmingPath (const QPainterPath &path) {
+    dimPath = path;
+    update();
+  }
+
+  /// \returns the same bounding rect as the graph's bounds
+  QRectF boundingRect(void) const override;
+
+  /// Paints the paths to the various contributors
+  void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
+};
+
 /// Graphics item managing the graph's boundaries and legend
 struct Border : public QGraphicsItem {
   VTree tree; ///< The tree whose border it is drawing
@@ -366,12 +414,17 @@ enum PenType {
 
 /// Cache structure for easy management of the graph's various components
 struct GUIItems {
+  bool initialized; ///< Whether or not the items have been allocated
+
   QGraphicsScene *scene;  ///< Root of all the graphics items
   Border *border; ///< Border & legend manager
   Node *root; ///< Root of the graph's tree
 
   /// Species contributions drawer
   Contributors *contributors;
+
+  /// Clipping dimmer
+  Dimmer *dimmer;
 
   QMap<Node::SID, Node*> nodes;  ///< Lookup table for the graphics nodes
 
@@ -424,7 +477,12 @@ struct PTGraphBuilder {
     cache.items.contributors = new Contributors(cache.tree);
     cache.items.scene->addItem(cache.items.contributors);
 
+    cache.items.dimmer = new Dimmer(cache.tree);
+    cache.items.scene->addItem(cache.items.dimmer);
+
     cache.items.scene->setSceneRect(cache.items.border->boundingRect());
+
+    cache.items.initialized = true;
   }
 
   /// Append a new Node to the graph based on the data contained in \p n
@@ -462,6 +520,7 @@ struct PTGraphBuilder {
     gn->setVisible(Node::SHOW_NAME, cache.config.showNames);
     gn->setVisible(Node::MIN_SURVIVAL, gn->survival() >= cache.config.minSurvival);
     gn->setVisible(Node::MIN_FULLNESS, gn->fullness() >= cache.config.minEnveloppe);
+    gn->setVisible(Node::CLIP_RANGE, gn->appearance() <= cache.config.clippingRange);
     gn->setVisible(Node::PARENT, parent ? parent->subtreeVisible() : true);
     gn->updateNode(gn->isStillAlive(cache.time));
   }

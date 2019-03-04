@@ -79,10 +79,22 @@ if (NOT CLUSTER_BUILD)
 
     #set(CMAKE_PREFIX_PATH $(find $HOME/Qt* -path "*/lib/cmake"))
 
-    set(QT_COMPONENTS Core Widgets Gui PrintSupport)
+    set(QT_COMPONENTS Core Widgets Gui)
+    set(QT_LIBS Qt5::Core Qt5::Widgets)
+
+    if (NOT S{NO_PRINTER})
+        set(QT_COMPONENTS ${QT_COMPONENTS} PrintSupport)
+        set(QT_LIBS ${QT_LIBS} Qt5::PrintSupport)
+    endif()
+
+    if (NOT S{NO_SVG})
+        set(QT_COMPONENTS ${QT_COMPONENTS} Svg)
+        set(QT_LIBS ${QT_LIBS} Qt5::Svg)
+    endif()
+
     find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
     message(STATUS "Qt found at " ${Qt5_DIR})
-    set(QT_LIBS Qt5::Core Qt5::Widgets Qt5::PrintSupport)
+
 
     ############################################################################
     ## GUI sources files
@@ -146,6 +158,18 @@ endif()
 
 option(BUILD_TESTS "Sets whether to build the tests executables" OFF)
 message(STATUS "Build tests " ${BUILD_TESTS})
+
+option(NO_PRINTER "Sets whether to disable QPrinter related capabilities" OFF)
+message(STATUS "No printer " ${NO_PRINTER})
+if (NO_PRINTER)
+    add_definitions(-NO_PRINTER)
+endif()
+
+option(NO_DVG "Sets whether to disable SVG related capabilities" OFF)
+message(STATUS "No printer " ${NO_SVG})
+if (NO_SVG)
+    add_definitions(-NO_SVG)
+endif()
 
 ################################################################################
 ## Make documentation

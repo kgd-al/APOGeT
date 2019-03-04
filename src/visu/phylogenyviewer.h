@@ -35,10 +35,10 @@ protected:
   /// Configuration data controlling what to draw and how
   using Config = gui::ViewerConfig;
 
+public:
   /// The direction in which to layout components
   using Direction = QBoxLayout::Direction;
 
-public:
   /// Create a phylogeny viewer with given \p parent and using \p config as
   /// its initial configuration
   PhylogenyViewer_base (QWidget *parent, Config config)
@@ -120,6 +120,9 @@ protected slots:
   /// \copydoc updateMinSurvival
   void updateMinEnveloppe (int v);
 
+  /// \copydoc updateMinSurvival
+  void updateClippingRange (uint t);
+
   /// Called when the corresponding checkbox has been changed
   void toggleShowNames (void);
 
@@ -142,8 +145,15 @@ public slots:
   /// Prints the current scene into a pixmap of size \p requestedSize
   QPixmap renderToPixmap (const QSize &requestedSize) const;
 
-  /// Prints the current scene into a (vector?) pdf
+#ifndef NO_PRINTER
+  /// Prints the current scene into a (vector?) portable document format file
   void renderToPDF (const QString &filename) const;
+#endif
+
+#ifndef NO_SVG
+  /// Prints the current scene into scalable vector graphics file
+  void renderToSVG (const QString &filename) const;
+#endif
 
   /// Process a hover event
   virtual void hoverEvent (SID sid, bool entered) = 0;
@@ -289,6 +299,7 @@ private:
 
   void updateLayout (void) override {
     Builder::updateLayout(_items);
+    update();
   }
 
   /// \returns a description of the data contained by this enveloppe point
