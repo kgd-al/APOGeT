@@ -17,6 +17,8 @@ namespace gui {
 // == Constants
 // ============================================================================
 
+static constexpr bool debugDrawAABB = false;
+
 // == Legend ========================================================
 
 ///< Note that the coordinate system is inverted (y points downward)
@@ -35,13 +37,17 @@ static constexpr float END_POINT_SIZE = NODE_RADIUS / 4;
 // == Z-values ======================================================
 
 static constexpr int NODE_SURVIVOR_LEVEL = 11;
-static constexpr int NODE_EXCTINCT_LEVEL = 10;
+static constexpr int NODE_EXTINCT_LEVEL = 10;
 
 static constexpr int DIMMER_LEVEL = 0;
 static constexpr int CONTRIBUTORS_LEVEL = 0;
 
-static constexpr int PATHS_LEVEL = -10;
-static constexpr int TIMELINES_LEVEL = -11;
+static constexpr int PATH_SURVIVOR_LEVEL = -5;
+static constexpr int TIMELINE_SURVIVOR_LEVEL = -6;
+
+static constexpr int PATH_EXTINCT_LEVEL = -10;
+static constexpr int TIMELINE_EXTINCT_LEVEL = -11;
+
 static constexpr int BOUNDS_LEVEL = -20;
 
 // == Paint style ===================================================
@@ -134,7 +140,7 @@ QPointF timelineAnchor (const Node *n) {
 // ============================================================================
 
 QRectF Node::boundingRect(void) const {
-  return QRectF(-NODE_SIZE, -NODE_SIZE, 2*NODE_SIZE, 2*NODE_SIZE);
+  return QRectF(-.5*NODE_SIZE, -.5*NODE_SIZE, NODE_SIZE, NODE_SIZE);
 }
 
 void Node::invalidate(const QPointF &newPos) {
@@ -192,15 +198,22 @@ void Node::updateNode (bool alive) {
     } while (n && !n->_onSurvivorPath);
   }
 
+  if (path) path->invalidatePath();
   timeline->invalidatePath();
   updateTooltip();
   autoscale();
 }
 
 void Node::setOnSurvivorPath (bool osp) {
+  static constexpr int levels [3][2] = {
+    { NODE_EXTINCT_LEVEL, NODE_SURVIVOR_LEVEL },
+    { TIMELINE_EXTINCT_LEVEL, TIMELINE_SURVIVOR_LEVEL },
+    { PATH_EXTINCT_LEVEL, PATH_SURVIVOR_LEVEL },
+  };
   bool s = _onSurvivorPath = osp;
-  setZValue(s ? NODE_SURVIVOR_LEVEL : NODE_EXCTINCT_LEVEL);
-  if (path) path->setZValue(PATHS_LEVEL + s);
+  setZValue(levels[0][s]);
+  if (timeline) timeline->setZValue(levels[1][s]);
+  if (path) path->setZValue(levels[2][s]);
 }
 
 void Node::hoverEnterEvent(QGraphicsSceneHoverEvent*) {
@@ -217,19 +230,47 @@ void Node::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) {
 }
 
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
-  if (visibilities.testFlag(SHOW_NAME)) {
+  if (debugDrawAABB) {
+    painter->save();
+    QPen pen = painter->pen();
+    pen.setColor(Qt::blue);
+    pen.setWidthF(0);
+    painter->setPen(pen);
+    painter->drawRect(boundingRect());
+    painter->restore();
+  }
+
+  if (visibilities.testFlag(SHOW_NAME)) {    
+    float pw = painter->pen().widthF();
     QRectF r (boundingRect().center() - QPoint(NODE_RADIUS, NODE_RADIUS),
               2*QSizeF(NODE_RADIUS, NODE_RADIUS));
+    r.adjust(pw, pw, -pw, -pw);
 
     painter->save();
-      painter->setBrush(Qt::white);
-      painter->setPen(_onSurvivorPath ? Qt::red : Qt::black);
-      painter->drawEllipse(boundingRect().center(), NODE_RADIUS, NODE_RADIUS);
-      painter->setPen(Qt::black);
       QFont f = painter->font();
       f.setPixelSize(12);
       painter->setFont(f);
+
+      painter->setClipRect(boundingRect());
+
+      // Test to see correct size
+      QRectF bounds;
+      painter->setPen(Qt::transparent);
+      painter->drawText(r, Qt::AlignCenter, sid, &bounds);
+
+      painter->setBrush(Qt::white);
+      painter->setPen(_onSurvivorPath ? Qt::red : Qt::black);
+      painter->drawEllipse(boundingRect().center(), NODE_RADIUS, NODE_RADIUS);
+
+      // Scale and do paint
+      float s = r.width() / bounds.width();
+      painter->setPen(Qt::black);
+      if (s < 1) {
+        painter->scale(s, s);
+        r = QTransform::fromScale(1 / s, 1 / s).mapRect(r);
+      }
       painter->drawText(r, Qt::AlignCenter, sid);
+
     painter->restore();
   }
 }
@@ -240,7 +281,7 @@ void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) 
 // ============================================================================
 
 Path::Path(Node *start, Node *end) : start(start), end(end) {
-  setZValue(PATHS_LEVEL);
+  setZValue(PATH_EXTINCT_LEVEL);
   assert(start && end);
   assert(start->treeBase == end->treeBase);
 }
@@ -265,6 +306,16 @@ QRectF Path::boundingRect() const {
 }
 
 void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
+  if (debugDrawAABB) {
+    painter->save();
+    QPen pen = painter->pen();
+    pen.setColor(Qt::red);
+    pen.setWidthF(0);
+    painter->setPen(pen);
+    painter->drawRect(boundingRect());
+    painter->restore();
+  }
+
   painter->setPen(start->treeBase->pathPen(
                     end->onSurvivorPath() ? details::PATH_SURVIVOR
                                           : details::PATH_BASE));
@@ -277,7 +328,7 @@ void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
 // ============================================================================
 
 Timeline::Timeline(Node *node) : node(node) {
-  setZValue(TIMELINES_LEVEL);
+  setZValue(TIMELINE_EXTINCT_LEVEL);
 }
 
 void Timeline::invalidatePath(void) {
@@ -311,16 +362,25 @@ void Timeline::invalidatePath(void) {
 }
 
 QPainterPath Timeline::shape (void) const {
-//  QPainterPath path;
-//  path.moveTo(points[0]);
-//  path.lineTo(points[1]);
-//  path.lineTo(points[2]);
-//  path.addEllipse(points[2], END_POINT_SIZE, END_POINT_SIZE);
-//  return QPainterPathStroker (BASE_PEN).createStroke(path);
-  return QPainterPath();
+  QPainterPath path;
+  path.moveTo(points[0]);
+  path.lineTo(points[2]);
+  path.addEllipse(points[2], END_POINT_SIZE, END_POINT_SIZE);
+  return QPainterPathStroker (node->treeBase->pathPen(details::PATH_BASE)).createStroke(path);
+//  return QPainterPath();
 }
 
 void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
+  if (debugDrawAABB) {
+    painter->save();
+    QPen pen = painter->pen();
+    pen.setColor(Qt::green);
+    pen.setWidthF(0);
+    painter->setPen(pen);
+    painter->drawRect(boundingRect());
+    painter->restore();
+  }
+
   if (points[0] != points[1]) {
     painter->setPen(node->treeBase->pathPen(details::PATH_SURVIVOR));
     painter->drawLine(points[0], points[1]);
@@ -635,53 +695,51 @@ void Border::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
   metrics = QFontMetrics(font);
   painter->setFont(font);
 
-  if (!config::PTree::winningPathOnly()) {
-    if (radius > 0) {
-      QList<QPair<QRectF, QString>> texts;
-      QRegion clip (-radius, -radius, 2*radius, 2*radius);
+  if (radius > 0) {
+    QList<QPair<QRectF, QString>> texts;
+    QRegion clip (-radius, -radius, 2*radius, 2*radius);
 
-      // Compute legend values and clip-out text areas
-      for (auto &p: legend) {
-        double v = p.first / double(LEGEND_TICKS);
-        double h = radius * v;
-        QString text = prettyNumber(h);
-        QRectF textRect = QRectF(metrics.boundingRect(text)).translated(p.second);
-        textRect.translate(-.5*textRect.width(), .5*textRect.height() - metrics.descent());
-        clip = clip.subtracted(QRegion(textRect.toAlignedRect()));
-        texts << QPair(textRect, text);
-      }
-
-      // Draw disks in reverse order (so that they overlap correctly)
-      painter->save();
-      painter->setPen(Qt::transparent);
-      for (auto it=legend.rbegin(); it!=legend.rend(); ++it) {
-        const auto &p  = *it;
-        double v = p.first / double(LEGEND_TICKS);
-        double h = radius * v;
-
-        QRectF rect (-h, -h, 2*h, 2*h);
-
-        painter->setBrush(gui::mix(QColor(0, 255 * (1 - v), 255 * v), QColor(Qt::white), 16./255.));
-        painter->drawEllipse(rect);
-      }
-      painter->restore();
-
-      // Draw 'axis'
-      painter->save();
-      painter->setBrush(Qt::transparent);
-      painter->setClipRegion(clip);
-      painter->drawPath(shape);
-      painter->restore();
-
-      // Draw tic values
-      for (auto &p: texts)
-        painter->drawText(p.first, Qt::AlignCenter, p.second);
-
-    } else {
-      // Just draw the 'pending' message
-      painter->setBrush(Qt::gray);
-      painter->drawPath(shape);
+    // Compute legend values and clip-out text areas
+    for (auto &p: legend) {
+      double v = p.first / double(LEGEND_TICKS);
+      double h = radius * v;
+      QString text = prettyNumber(h);
+      QRectF textRect = QRectF(metrics.boundingRect(text)).translated(p.second);
+      textRect.translate(-.5*textRect.width(), .5*textRect.height() - metrics.descent());
+      clip = clip.subtracted(QRegion(textRect.toAlignedRect()));
+      texts << QPair(textRect, text);
     }
+
+    // Draw disks in reverse order (so that they overlap correctly)
+    painter->save();
+    painter->setPen(Qt::transparent);
+    for (auto it=legend.rbegin(); it!=legend.rend(); ++it) {
+      const auto &p  = *it;
+      double v = p.first / double(LEGEND_TICKS);
+      double h = radius * v;
+
+      QRectF rect (-h, -h, 2*h, 2*h);
+
+      painter->setBrush(gui::mix(QColor(0, 255 * (1 - v), 255 * v), QColor(Qt::white), 16./255.));
+      painter->drawEllipse(rect);
+    }
+    painter->restore();
+
+    // Draw 'axis'
+    painter->save();
+    painter->setBrush(Qt::transparent);
+    painter->setClipRegion(clip);
+    painter->drawPath(shape);
+    painter->restore();
+
+    // Draw tic values
+    for (auto &p: texts)
+      painter->drawText(p.first, Qt::AlignCenter, p.second);
+
+  } else {
+    // Just draw the 'pending' message
+    painter->setBrush(Qt::gray);
+    painter->drawPath(shape);
   }
 }
 

@@ -9,7 +9,12 @@ DEFINE_PARAMETER(double, similarityThreshold, .5)
 DEFINE_PARAMETER(double, avgCompatibilityThreshold, .25)
 DEFINE_PARAMETER(uint, enveloppeSize, 5)
 DEFINE_PARAMETER(bool, simpleNewSpecies, true)
-DEFINE_PARAMETER(bool, winningPathOnly, false)
+
+DEFINE_PARAMETER(bool, showNodeNames, true)
+DEFINE_PARAMETER(uint, minNodeSurvival, 0)
+DEFINE_PARAMETER(uint, minNodeEnveloppe, 0)
+DEFINE_PARAMETER(bool, survivorNodesOnly, false)
+DEFINE_PARAMETER(uint, speciesDetailVerbosity, 1)
 
 DEFINE_PARAMETER(uint, stillbornTrimmingPeriod, 100)
 DEFINE_PARAMETER(float, stillbornTrimmingThreshold, .25)

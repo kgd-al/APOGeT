@@ -11,21 +11,33 @@
 
 template <typename GENOME, typename UDATA>
 int run(int argc, char *argv[]) {
-  using PTree = phylogeny::PhylogenicTree<GENOME, UDATA>;
+  using PTree = phylogeny::PhylogeneticTree<GENOME, UDATA>;
   using PViewer = gui::PhylogenyViewer<GENOME, UDATA>;
   using Verbosity = config::Verbosity;
+
+  auto config = PViewer::defaultConfig();
 
   cxxopts::Options options("PTreeViewer", "Loads and displays a phenotypic tree for \""
                            + utils::className<GENOME>() + "\" genomes");
   options.add_options()
     ("h,help", "Display help")
-    ("c,config", "File containing configuration data", cxxopts::value<std::string>())
-    ("v,verbosity", "Verbosity level. " + config::verbosityValues(), cxxopts::value<Verbosity>())
-    ("minSurvival", "Minimal survival duration", cxxopts::value<uint>())
-    ("minEnveloppe", "Minimal fullness for the enveloppe", cxxopts::value<float>())
-    ("showNames", "Whether or not to show node names", cxxopts::value<bool>())
+    ("c,config", "File containing configuration data",
+     cxxopts::value<std::string>())
+    ("v,verbosity", "Verbosity level. " + config::verbosityValues(),
+     cxxopts::value<Verbosity>())
+    ("t,tree", "File containing the phenotypic tree [MANDATORY]",
+     cxxopts::value<std::string>())
+    ("min-survival", "Minimal survival duration",
+     cxxopts::value(config.minSurvival))
+    ("min-enveloppe", "Minimal fullness for the enveloppe",
+     cxxopts::value(config.minEnveloppe))
+    ("survivors-only", "Whether or not to only show paths leading to still-alive"
+                      " species",
+     cxxopts::value(config.survivorsOnly)->default_value("false"))
+    ("show-names", "Whether or not to show node names",
+     cxxopts::value(config.showNames)->default_value("true"))
     ("p,print", "Render p-tree into 'filename'", cxxopts::value<std::string>())
-    ("t,tree", "File containing the phenotypic tree [MANDATORY]", cxxopts::value<std::string>())
+    ("radius", "Tree rendering radius", cxxopts::value(config.rasterRadius))
     ;
 
   auto result = options.parse(argc, argv);
@@ -49,11 +61,14 @@ int run(int argc, char *argv[]) {
 
   config::PTree::setupConfig(configFile, verbosity);
 
-  auto config = PViewer::defaultConfig();
-
-  if (result.count("minSurvival"))  config.minSurvival = result["minSurvival"].as<uint>();
-  if (result.count("minEnveloppe"))  config.minEnveloppe = result["minEnveloppe"].as<float>();
-  if (result.count("showNames"))  config.showNames = result["showNames"].as<bool>();
+  if (!result.count("show-names"))
+    config.showNames = config::PTree::showNodeNames();
+  if (!result.count("min-survival"))
+    config.minSurvival = config::PTree::minNodeSurvival();
+  if (!result.count("min-enveloppe"))
+    config.minEnveloppe = config::PTree::minNodeEnveloppe();
+  if (!result.count("survivors-only"))
+    config.survivorsOnly = config::PTree::survivorNodesOnly();
 
   QString outfile;
   if (result.count("print"))  outfile = QString::fromStdString(result["print"].as<std::string>());

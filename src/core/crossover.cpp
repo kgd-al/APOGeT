@@ -47,7 +47,7 @@ DEFINE_GENOME_DISTANCE_WEIGHTS({
 
 #undef GENOME
 
-#define CFILE config::SAGConfigFile<genotype::BOCData>
+#define CFILE config::EDNAConfigFile<genotype::BOCData>
 
 DEFINE_PARAMETER(float, mutateChild, .5)
 

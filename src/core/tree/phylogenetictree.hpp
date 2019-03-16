@@ -16,10 +16,14 @@
 #include "callbacks.hpp"
 
 /*!
- * \file phylogenictree.hpp
+ * \file phylogenetictree.hpp
  *
  * Contains the core classes for the phylogeny algorithms
  */
+
+/// NOTE Todo list
+///  FIXME Bug in survivor path
+///  TODO Separate PTtree.config from PViewer.config
 
 namespace phylogeny {
 
@@ -42,7 +46,7 @@ struct NoUserData {
 ///
 /// FIXME At least once, _idToSpecies.at(foo) throws even though _idToSpecies.contains(foo) == true
 template <typename GENOME, typename UDATA>
-class PhylogenicTree {
+class PhylogeneticTree {
   /// Helper lambda for debug printing
   static constexpr auto debug = [] {
     return config::PTree::DEBUG_LEVEL() * config::PTree::DEBUG_PTREE();
@@ -68,7 +72,7 @@ public:
   using Nodes = typename Node::Collection;
 
   /// Specialization used by this tree. Uses CRTP
-  using Callbacks = Callbacks_t<PhylogenicTree<Genome, UserData>>;
+  using Callbacks = Callbacks_t<PhylogeneticTree<Genome, UserData>>;
 
   /// Helper alias for the configuration data
   using Config = config::PTree;
@@ -80,7 +84,7 @@ public:
   using SpeciesContribution = typename Contributors::Contributions;
 
   /// Create an empty PTree
-  PhylogenicTree(void) {
+  PhylogeneticTree(void) {
     _nextNodeID = SID(0);
     _enveloppeSize = Config::enveloppeSize();
     _stillborns = 0;
@@ -212,7 +216,7 @@ public:
 
   /// Stream \p pt to \p os. Mostly for debugging purpose: output is quickly
   /// unintelligible
-  friend std::ostream& operator<< (std::ostream &os, const PhylogenicTree &pt) {
+  friend std::ostream& operator<< (std::ostream &os, const PhylogeneticTree &pt) {
     os << pt._hybrids << " Hybrids;\n";
     return os << *pt._root;
   }
@@ -238,6 +242,13 @@ protected:
     return curr;
   }
 
+public:
+  /// Access current value without modifying it
+  SID nextNodeID (void) const {
+    return _nextNodeID;
+  }
+
+protected:
   /// Allows mapping a genome ID to its species ID
   struct IdToSpeciesMap {
 
@@ -838,7 +849,7 @@ public:
   /// Serialise PTree \p pt into a json
   /// \arg complete Whether to include all data required to resume a simulation
   /// or only those used in displaying/analysing
-  static void toJson (json &j, const PhylogenicTree &pt, bool complete) {
+  static void toJson (json &j, const PhylogeneticTree &pt, bool complete) {
     j["_step"] = pt._step;
     j["_envSize"] = pt._enveloppeSize;
     j["_stillborns"] = pt._stillborns;
@@ -852,7 +863,7 @@ public:
   /// Deserialise PTree \p pt from json \p j
   /// \arg complete Whether to load all data required to resume a simulation
   /// or only those used in displaying/analysing.
-  static void fromJson (const json &j, PhylogenicTree &pt, bool complete) {
+  static void fromJson (const json &j, PhylogeneticTree &pt, bool complete) {
     pt._step = j["_step"];
     pt._stillborns = j["_stillborns"];
     pt._enveloppeSize = j["_envSize"];
@@ -894,14 +905,14 @@ public:
   }
 
   /// \returns a phylogenic tree rebuilt from data at the given location
-  static PhylogenicTree readFrom (const std::string &filename, bool complete = false) {
+  static PhylogeneticTree readFrom (const std::string &filename, bool complete = false) {
     std::ifstream ifs (filename);
     if (!ifs)
       throw std::invalid_argument ("Unable to open '" + filename
                                    + "' for reading");
 
     else {
-      PhylogenicTree pt;
+      PhylogeneticTree pt;
       json j = json::parse(utils::readAll(filename));
       fromJson(j, pt, complete);
       return pt;

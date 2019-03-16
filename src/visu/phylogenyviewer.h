@@ -114,6 +114,9 @@ protected slots:
   // ===========================================================================
   // Config update
 
+  /// Called when the corresponding checkbox has been changed
+  void toggleShowOnlySurvivors (void);
+
   /// Called when the corresponding slider's value has been changed
   void updateMinSurvival (uint v);
 
@@ -123,7 +126,7 @@ protected slots:
   /// \copydoc updateMinSurvival
   void updateClippingRange (uint t);
 
-  /// Called when the corresponding checkbox has been changed
+  /// \copydoc toggleShowOnlySurvivors
   void toggleShowNames (void);
 
 public slots:
@@ -131,19 +134,14 @@ public slots:
   void makeFit (bool autofit);
 
   /// Pops a detailed view a species node contents up
-  void speciesDetailPopup (SID id, QStringList data,
+  void speciesDetailPopup (SID id, QStringList data, const QString &summary,
                            QGraphicsSceneMouseEvent *e);
 
   /// Prints the current scene to the image file \p filename
   void renderTo (QString filename = "");
 
-  /// Prints the current scene into a pixmap
-  QPixmap renderToPixmap (void) const {
-    return renderToPixmap(_items.scene->sceneRect().size().toSize());
-  }
-
   /// Prints the current scene into a pixmap of size \p requestedSize
-  QPixmap renderToPixmap (const QSize &requestedSize) const;
+  QPixmap renderToPixmap (QSize requestedSize) const;
 
 #ifndef NO_PRINTER
   /// Prints the current scene into a (vector?) portable document format file
@@ -209,7 +207,7 @@ class PhylogenyViewer : public PhylogenyViewer_base {
 public:
 
   /// Helper alias to the PTree visualized
-  using PTree = phylogeny::PhylogenicTree<GENOME, UDATA>;
+  using PTree = phylogeny::PhylogeneticTree<GENOME, UDATA>;
 
   /// Helper alias to the callbacks type used by the PTree
   using PTCallbacks = typename PTree::Callbacks;
@@ -283,11 +281,20 @@ protected:
 
   void doubleClickEvent (const Node &gn, QGraphicsSceneMouseEvent *e) override {
     const typename PTree::Node &n = *_ptree.nodeAt(gn.id);
+
     QStringList data;
+    std::vector<GENOME> genomes;
+
     data.append(gn.computeTooltip());
-    for (const auto &ep: n.enveloppe)
+    for (const auto &ep: n.enveloppe) {
       data.append(dumpEnveloppePoint(ep));
-    speciesDetailPopup(gn.id, data, e);
+      genomes.push_back(ep.genome);
+    }
+
+    std::ostringstream oss;
+    GENOME::aggregate(oss, genomes, config::PTree::speciesDetailVerbosity());
+
+    speciesDetailPopup(gn.id, data, QString::fromStdString(oss.str()), e);
   }
 
 private:
@@ -322,9 +329,9 @@ private:
 ///
 /// Forwards events to the viewer.
 template <typename GENOME, typename UDATA>
-struct phylogeny::Callbacks_t<phylogeny::PhylogenicTree<GENOME, UDATA>> {
+struct phylogeny::Callbacks_t<phylogeny::PhylogeneticTree<GENOME, UDATA>> {
   /// The PTree type at the source of these callbacks
-  using PT = phylogeny::PhylogenicTree<GENOME, UDATA>;
+  using PT = phylogeny::PhylogeneticTree<GENOME, UDATA>;
 
   /// The PViewer type receiving these forwarded events
   using PV = gui::PhylogenyViewer<GENOME, UDATA>;

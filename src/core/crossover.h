@@ -20,8 +20,8 @@
 namespace genotype {
 
 /// Common crossover control data
-class BOCData : public SelfAwareGenome<BOCData> {
-  APT_SAG()
+class BOCData : public EDNA<BOCData> {
+  APT_EDNA()
 
   // ========================================================================
   // == Compatibility function
@@ -48,12 +48,12 @@ class BOCData : public SelfAwareGenome<BOCData> {
 
   /// \cond internal
   /// Needs privileged access
-  friend struct config::SAGConfigFile<BOCData>;
+  friend struct config::EDNAConfigFile<BOCData>;
   /// \endcond
 
 public:
   /// Helper alias to the source of randomness
-  using Dice = SelfAwareGenome<BOCData>::Dice;
+  using Dice = EDNA<BOCData>::Dice;
 
   /// The possible sexes
   enum Sex { FEMALE, MALE };
@@ -97,9 +97,16 @@ public:
   /// \note thread-safe
   static GID nextID (void) {
     if (NEXT_ID == std::numeric_limits<GID_ut>::max())
-      utils::doThrow<std::out_of_range>("Exhausted all possible identifers for the underlying"
-                                        "type ", utils::className<GID_ut>());
+      utils::doThrow<std::out_of_range>(
+        "Exhausted all possible identifers for the underlying type ",
+        utils::className<GID_ut>());
     return GID(NEXT_ID++);
+  }
+
+  /// \returns value for next id
+  /// \warning This does not modify the current value. Use nextID instead
+  static GID getNextID (void) {
+    return GID(GID_ut(NEXT_ID));
   }
 
   /// The set of parents
@@ -249,7 +256,7 @@ std::istream& operator>> (std::istream &is, BOCData::Sex &s);
 namespace config {
 
 /// Config file for the crossover algorithms
-template <> struct SAG_CONFIG_FILE(BOCData) {
+template <> struct EDNA_CONFIG_FILE(BOCData) {
   /// Helper alias to bounds object for floating point fields
   using Bf = Bounds<float>;
 
@@ -353,7 +360,7 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
   if (dice(compat)) {
     for (GENOME &child: litter) {
       child = cross(mother, father, dice);
-      if (dice(config::SAGConfigFile<BOCData>::mutateChild()))
+      if (dice(config::EDNAConfigFile<BOCData>::mutateChild()))
         child.mutate(dice);
     }
     return true;
@@ -403,7 +410,7 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
   if (dice(compat)) {
     for (GENOME &child: litter) {
       child = cross(mother, father, dice, alg);
-      if (dice(config::SAGConfigFile<BOCData>::mutateChild()))
+      if (dice(config::EDNAConfigFile<BOCData>::mutateChild()))
         child.mutate(dice);
     }
     return true;

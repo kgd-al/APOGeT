@@ -63,7 +63,7 @@ add_library(apt-core STATIC
     "src/core/tree/speciescontributors.cpp"
     "src/core/tree/speciescontributors.h"
     "src/core/tree/node.hpp"
-    "src/core/tree/phylogenictree.hpp"
+    "src/core/tree/phylogenetictree.hpp"
 )
 target_link_libraries(apt-core ${tools_LIBRARIES})
 

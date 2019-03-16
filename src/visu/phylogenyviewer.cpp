@@ -3,6 +3,7 @@
 #include <QStack>
 
 #include <QToolBar>
+#include <QSplitter>
 #include <QLabel>
 #include <QSlider>
 #include <QCheckBox>
@@ -212,9 +213,16 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   connect(print, &QAction::triggered, [this] { renderTo(""); });
 
   // Show names checkbox
+  QCheckBox *survivorsOnly = new QCheckBox("Survivors only");
+  survivorsOnly->setChecked(_config.survivorsOnly);
+  connect(survivorsOnly, &QCheckBox::toggled,
+          this, &PhylogenyViewer_base::toggleShowOnlySurvivors);
+
+  // Show names checkbox
   QCheckBox *showNames = new QCheckBox("Show names");
   showNames->setChecked(_config.showNames);
-  connect(showNames, &QCheckBox::toggled, this, &PhylogenyViewer_base::toggleShowNames);
+  connect(showNames, &QCheckBox::toggled,
+          this, &PhylogenyViewer_base::toggleShowNames);
 
   // Autofit checkbox
   QCheckBox *autofit = new QCheckBox("AutoFit");
@@ -244,6 +252,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   toolbar->addWidget(sliderHolder);
 
   // Populate the rest of the toolbar
+  toolbar->addWidget(survivorsOnly);
   toolbar->addWidget(showNames);
   toolbar->addWidget(autofit);
   toolbar->addAction(print);
@@ -277,6 +286,14 @@ void PhylogenyViewer_base::resizeEvent(QResizeEvent*) {
 // ============================================================================
 // == Config update
 // ============================================================================
+
+void PhylogenyViewer_base::toggleShowOnlySurvivors(void) {
+  _config.survivorsOnly = !_config.survivorsOnly;
+  updateNodes([this] (Node *n) {
+    n->setVisible(Node::SURVIVORS, !_config.survivorsOnly || n->onSurvivorPath());
+  });
+  updateLayout();
+}
 
 void PhylogenyViewer_base::updateMinSurvival(uint v) {
   _config.minSurvival = v;
@@ -319,6 +336,7 @@ void PhylogenyViewer_base::toggleShowNames(void) {
   _config.showNames = !_config.showNames;
   updateNodes([this] (Node *n) {
     n->setVisible(Node::SHOW_NAME, _config.showNames);
+    n->update();
   });
 }
 
@@ -391,17 +409,25 @@ void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC
 // ============================================================================
 
 void PhylogenyViewer_base::speciesDetailPopup (SID id, QStringList data,
+                                               const QString &summary,
                                                QGraphicsSceneMouseEvent *e) {
   QDialog *dialog = new QDialog (this);
-    QVBoxLayout *layout = new QVBoxLayout;
+    QVBoxLayout *vlayout = new QVBoxLayout;
       QLabel *generalLabel = new QLabel (data.takeFirst());
-      QListWidget *listLabel = new QListWidget;
+      QHBoxLayout *hlayout = new QHBoxLayout;
+        QListWidget *listLabel = new QListWidget;
+        QScrollArea *sumupScroller = new QScrollArea;
+          QLabel *sumupLabel = new QLabel (summary);
 
-    layout->addWidget(generalLabel);
-      listLabel->setFlow(QListWidget::LeftToRight);
-      listLabel->insertItems(0, data);
-    layout->addWidget(listLabel);
-  dialog->setLayout(layout);
+    vlayout->addWidget(generalLabel);
+    vlayout->addLayout(hlayout);
+      hlayout->addWidget(listLabel);
+        listLabel->setFlow(QListWidget::LeftToRight);
+        listLabel->insertItems(0, data);
+      hlayout->addWidget(sumupScroller);
+        sumupScroller->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+        sumupScroller->setWidget(sumupLabel);
+  dialog->setLayout(vlayout);
 
   dialog->setWindowTitle(QString("Details of species ")
                        + QString::number(std::underlying_type<SID>::type(id)));
@@ -420,6 +446,7 @@ void PhylogenyViewer_base::renderTo (QString filename) {
 
   if (filename.isEmpty()) return;
 
+  bool failed = false;
   QString ext = filename.mid(filename.lastIndexOf('.')+1);
   if (ext == "pdf")
     renderToPDF(filename);
@@ -431,32 +458,55 @@ void PhylogenyViewer_base::renderTo (QString filename) {
     if (ext != "png")
       std::cout << "Unkown extension type '" << ext.toStdString()
                 << "'. Defaulting to png" << std::endl;
-    QPixmap pixmap = renderToPixmap();
-    pixmap.save(filename);
+    QPixmap pixmap = renderToPixmap(QSize());
+    failed = pixmap.isNull();
+    if (!failed)  pixmap.save(filename);
   }
 
   if (hovered)  hovered->hoverLeaveEvent(nullptr);
-  std::cout << "Saved to " << filename.toStdString() << std::endl;
+  if (failed)
+    std::cerr << "Failed to save " << filename.toStdString() << std::endl;
+  else
+    std::cout << "Saved to " << filename.toStdString() << std::endl;
 }
 
-QPixmap PhylogenyViewer_base::renderToPixmap (const QSize &requestedSize) const {
+QPixmap PhylogenyViewer_base::renderToPixmap (QSize requestedSize) const {
+  if (!requestedSize.isValid()) {
+    requestedSize = _items.scene->sceneRect().size().toSize();
+    if (_config.rasterRadius > 0
+        && requestedSize.width() > _config.rasterRadius)
+      requestedSize = requestedSize * _config.rasterRadius
+                                    / requestedSize.width();
+  }
+
+  qDebug() << "Creating pixmap of " << requestedSize;
   QPixmap pixmap (requestedSize);
   pixmap.fill(Qt::transparent);
   QRectF bounds = gui::centeredInto(QRectF({0,0}, requestedSize),
                                     _items.scene->sceneRect());
 
   QPainter painter(&pixmap);
-  painter.setRenderHint(QPainter::Antialiasing);
-  _items.scene->render(&painter, bounds.toRect());
-  painter.end();
+  if (!painter.isActive())
+    std::cerr << "Pixmap painter for size " << pixmap.width() << "x"
+              << pixmap.height() << " is not active" << std::endl;
+
+  else {
+    painter.setRenderHint(QPainter::Antialiasing);
+    _items.scene->render(&painter, bounds.toRect());
+    painter.end();
+  }
 
   return pixmap;
 }
 
 #ifndef NO_PRINTER
 void PhylogenyViewer_base::renderToPDF(const QString &filename) const {
+  QSizeF printSize = _items.scene->sceneRect().size();
+  if (_config.rasterRadius > 0)
+    printSize = printSize * _config.rasterRadius / printSize.width();
+
   QPrinter printer(QPrinter::HighResolution);
-  printer.setPageSizeMM(_items.scene->sceneRect().size());
+  printer.setPageSizeMM(printSize);
   printer.setOrientation(QPrinter::Portrait);
   printer.setOutputFormat(QPrinter::PdfFormat);
   printer.setOutputFileName(filename);

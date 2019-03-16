@@ -9,6 +9,9 @@
 
 /// Decoy genome with no internal structure
 struct Genome {
+  /// Aggregates emptiness
+  static void aggregate (std::ostream&, const std::vector<Genome>&, uint) {}
+
   /// Should convert the genome to json but, in fact, does nothing
   friend void to_json (nlohmann::json&, const Genome&) {}
 

@@ -11,7 +11,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsItem>
 
-#include "../core/tree/phylogenictree.hpp"
+#include "../core/tree/phylogenetictree.hpp"
 
 namespace gui {
 
@@ -26,6 +26,9 @@ struct ViewerConfig {
   /// Maximal range for survival monitoring
   uint clippingRange = -1;
 
+  /// Whether only show paths leading to still alive species
+  bool survivorsOnly = false;
+
   /// Whether to display nodes
   bool showNames = true;
 
@@ -34,6 +37,9 @@ struct ViewerConfig {
 
   /// Whether to keep a screenshot per step
   bool screenshots = false;
+
+  /// Tree rasterized radius when rendering to file
+  float rasterRadius = -1;
 };
 
 /// \cond internal
@@ -72,11 +78,12 @@ class Node : public QGraphicsItem {
 public:
   /// Enumeration encoding a node's visibility
   enum Visibility {
-    SHOW_NAME = 1,
-    PARENT = 2,
-    MIN_SURVIVAL = 4,
-    MIN_FULLNESS = 8,
-    CLIP_RANGE = 16
+       SHOW_NAME = 1 << 0,
+          PARENT = 1 << 1,
+       SURVIVORS = 1 << 2,
+    MIN_SURVIVAL = 1 << 3,
+    MIN_FULLNESS = 1 << 4,
+      CLIP_RANGE = 1 << 5
   };
   Q_DECLARE_FLAGS(Visibilities, Visibility)
 
@@ -162,7 +169,7 @@ public:
   /// \returns Whether this node has sufficient visiblity values
   bool subtreeVisible (void) const {
     static constexpr auto mask =
-        (MIN_FULLNESS | MIN_SURVIVAL | CLIP_RANGE | PARENT);
+        (SURVIVORS | MIN_FULLNESS | MIN_SURVIVAL | CLIP_RANGE | PARENT);
     return (visibilities & mask) == mask;
   }
 
@@ -463,7 +470,7 @@ struct PTGraphBuilder {
   /// Parse the \p pt PTree and build the associated graph complete with nodes,
   /// paths and legend
   template <typename GENOME, typename UDATA>
-  static void fillScene (const phylogeny::PhylogenicTree<GENOME, UDATA> &pt,
+  static void fillScene (const phylogeny::PhylogeneticTree<GENOME, UDATA> &pt,
                          Cache &cache) {
 
     cache.items.border = new Border(cache.tree, cache.time);
@@ -518,6 +525,7 @@ struct PTGraphBuilder {
 
     // Manage visibility
     gn->setVisible(Node::SHOW_NAME, cache.config.showNames);
+    gn->setVisible(Node::SURVIVORS, !cache.config.survivorsOnly || gn->onSurvivorPath());
     gn->setVisible(Node::MIN_SURVIVAL, gn->survival() >= cache.config.minSurvival);
     gn->setVisible(Node::MIN_FULLNESS, gn->fullness() >= cache.config.minEnveloppe);
     gn->setVisible(Node::CLIP_RANGE, gn->appearance() <= cache.config.clippingRange);
