@@ -274,3 +274,13 @@ if(NOT \${${PROJECT_NAME}_BUILD_TYPE} STREQUAL \${CMAKE_BUILD_TYPE})
 endif()\n"
 )
 install(FILES ${CONFIG} DESTINATION cmake)
+
+set(DEPENDENCY_GENERATOR ${tools_DIR}/generate_dependency_data.sh)
+set(DEPENDENCY_FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.dependency")
+add_custom_target(dependencies ALL DEPENDS ${DEPENDENCY_FILE})
+add_custom_command(
+    OUTPUT ${DEPENDENCY_FILE} always_check
+    COMMAND ${DEPENDENCY_GENERATOR} ${DEPENDENCY_FILE} AgnosticPhylogeneticTree
+    COMMENT "Generating dependency data"
+)
+install(FILES ${DEPENDENCY_FILE} DESTINATION cmake)

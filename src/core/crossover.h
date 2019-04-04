@@ -244,7 +244,6 @@ DECLARE_GENOME_FIELD(BOCData, float, inbreedTolerance)
 DECLARE_GENOME_FIELD(BOCData, float, outbreedTolerance)
 DECLARE_GENOME_FIELD(BOCData, BOCData::Sex, sex)
 
-
 /// Pretty prints a sex enumeration value
 std::ostream& operator<< (std::ostream &os, BOCData::Sex s);
 
