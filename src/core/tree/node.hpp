@@ -43,6 +43,13 @@ struct Node {
       p.userData = std::make_unique<UDATA>(genotype::BOCData::INVALID_GID);
       *p.userData = j[1].get<UDATA>();
     }
+
+    /// Asserts that two enveloppe points are equal
+    friend void assertEqual (const EnvPoint &lhs, const EnvPoint &rhs) {
+      using utils::assertEqual;
+      assertEqual(lhs.genome, rhs.genome);
+      assertEqual(lhs.userData, rhs.userData);
+    }
   };
 
 private:
@@ -170,6 +177,22 @@ public:
       os << "\t" << id() << " -> " << n->id() << ";\n";
       n->logTo(os);
     }
+  }
+
+  /// Asserts that two phylogenetic nodes are equal
+  friend void assertEqual (const Node &lhs, const Node &rhs) {
+    using utils::assertEqual;
+
+    assertEqual(bool(lhs._parent), bool(rhs._parent));
+    if (lhs._parent && rhs._parent)
+      assertEqual(lhs._parent->id(), rhs._parent->id());
+
+    assertEqual(lhs.data, rhs.data);
+    assertEqual(lhs.contributors, rhs.contributors);
+    assertEqual(lhs.enveloppe, rhs.enveloppe);
+    assertEqual(lhs.distances, rhs.distances);
+
+    assertEqual(lhs._children, rhs._children);
   }
 
 private:

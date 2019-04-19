@@ -75,6 +75,14 @@ public:
     c._count = j[i++];
     c._elligible = j[i++];
   }
+
+  /// Asserts that two contributors are equal
+  friend void assertEqual (const Contributor &lhs, const Contributor &rhs) {
+    using utils::assertEqual;
+    assertEqual(lhs._speciesID, rhs._speciesID);
+    assertEqual(lhs._count, rhs._count);
+    assertEqual(lhs._elligible, rhs._elligible);
+  }
 };
 
 /// Describes a contribution update
@@ -185,6 +193,13 @@ public:
     while (p && p != n)
       p = p->parent();
     return p != n;
+  }
+
+  /// Asserts that two contribution collections are equal
+  friend void assertEqual (const Contributors &lhs, const Contributors &rhs) {
+    using utils::assertEqual;
+    assertEqual(lhs.nodeID, rhs.nodeID);
+    assertEqual(lhs.vec, rhs.vec);
   }
 };
 

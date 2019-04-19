@@ -39,6 +39,15 @@ struct SpeciesData {
     d.count = j[i++];
     d.currentlyAlive = j[i++];
   }
+
+  /// Asserts that two species data are equal
+  friend void assertEqual (const SpeciesData &lhs, const SpeciesData &rhs) {
+    using utils::assertEqual;
+    assertEqual(lhs.firstAppearance, rhs.firstAppearance);
+    assertEqual(lhs.lastAppearance, rhs.lastAppearance);
+    assertEqual(lhs.count, rhs.count);
+    assertEqual(lhs.currentlyAlive, rhs.currentlyAlive);
+  }
 };
 
 } // end of namespace phylogeny

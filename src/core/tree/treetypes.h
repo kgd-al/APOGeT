@@ -85,6 +85,13 @@ struct ordered_pair {
     if (lhs.first != rhs.first) return lhs.first < rhs.first;
     return lhs.second < rhs.second;
   }
+
+  /// Asserts that two ordered pairs are equal
+  friend void assertEqual (const ordered_pair &lhs, const ordered_pair &rhs) {
+    using utils::assertEqual;
+    assertEqual(lhs.first, rhs.first);
+    assertEqual(lhs.second, rhs.second);
+  }
 };
 
 /// Helper alias to a map whose keys are ordered so that

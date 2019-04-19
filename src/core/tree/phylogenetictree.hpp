@@ -267,6 +267,13 @@ protected:
       friend void from_json (const json &j, ITSMData &d) {
         d.species = j[0], d.refCount = j[1];
       }
+
+      /// Asserts that two id to species map's data are equal
+      friend void assertEqual (const ITSMData &lhs, const ITSMData &rhs) {
+        using utils::assertEqual;
+        assertEqual(lhs.species, rhs.species);
+        assertEqual(lhs.refCount, rhs.refCount);
+      }
     };
 
     /// Helper alias to the type of the underlying container
@@ -354,6 +361,12 @@ protected:
     /// Deserialize the underlying map from a json
     friend void from_json (const json &j, IdToSpeciesMap &m) {
       m.map = j.get<map_t>();
+    }
+
+    /// Assert that two such map are equal
+    friend void assertEqual (const IdToSpeciesMap &lhs,
+                             const IdToSpeciesMap &rhs) {
+      utils::assertEqual(lhs.map, rhs.map);
     }
   };
 
@@ -887,6 +900,20 @@ public:
 #ifndef NDEBUG
     pt.checkMC();
 #endif
+  }
+
+  /// Asserts that two phylogenetic trees are equal
+  friend void assertEqual (const PhylogeneticTree &lhs,
+                           const PhylogeneticTree &rhs) {
+    using utils::assertEqual;
+    assertEqual(lhs._root, rhs._root);
+    assertEqual(lhs._nodes, rhs._nodes);
+    assertEqual(lhs._idToSpecies, rhs._idToSpecies);
+
+    assertEqual(lhs._nextNodeID, rhs._nextNodeID);
+    assertEqual(lhs._enveloppeSize, rhs._enveloppeSize);
+    assertEqual(lhs._stillborns, rhs._stillborns);
+    assertEqual(lhs._step, rhs._step);
   }
 
   /// Stores itself at the given location
