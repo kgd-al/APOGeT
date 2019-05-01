@@ -65,7 +65,7 @@ struct CFILE : public ConfigFile<CFILE> {
   DECLARE_DEBUG_PARAMETER(bool, DEBUG_FULL_CONTINUOUS, true)
 
   /// (Debug) selector for the enveloppe criteria
-  DECLARE_DEBUG_PARAMETER(int, DEBUG_ENV_CRIT, 0)
+  DECLARE_DEBUG_PARAMETER(int, DEBUG_ENV_CRIT, 1)
 
   /// How much debug information should be printed out
   DECLARE_DEBUG_PARAMETER(uint, DEBUG_LEVEL, 0)
