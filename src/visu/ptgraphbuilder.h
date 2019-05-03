@@ -40,6 +40,14 @@ struct ViewerConfig {
 
   /// Tree rasterized radius when rendering to file
   float rasterRadius = -1;
+
+  /// Values for the node/timelines color
+  enum Colors {
+    NONE = 0, ///< No color
+    SURVIVORS = 1,  ///< Color survivor paths in red
+    CUSTOM = 2  ///< Color path from specific species
+  };
+  Colors color = Colors::SURVIVORS; ///< Current color mode
 };
 
 /// \cond internal
@@ -524,13 +532,13 @@ struct PTGraphBuilder {
     gt->setVisible(gn->subtreeVisible());
 
     // Manage visibility
+    gn->updateNode(gn->isStillAlive(cache.time));
     gn->setVisible(Node::SHOW_NAME, cache.config.showNames);
     gn->setVisible(Node::SURVIVORS, !cache.config.survivorsOnly || gn->onSurvivorPath());
     gn->setVisible(Node::MIN_SURVIVAL, gn->survival() >= cache.config.minSurvival);
     gn->setVisible(Node::MIN_FULLNESS, gn->fullness() >= cache.config.minEnveloppe);
     gn->setVisible(Node::CLIP_RANGE, gn->appearance() <= cache.config.clippingRange);
     gn->setVisible(Node::PARENT, parent ? parent->subtreeVisible() : true);
-    gn->updateNode(gn->isStillAlive(cache.time));
   }
 
   /// Recompute all graphics items positions (nodes, paths, timelines)

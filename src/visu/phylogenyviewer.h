@@ -129,6 +129,9 @@ protected slots:
   /// \copydoc toggleShowOnlySurvivors
   void toggleShowNames (void);
 
+  /// Called when a different color checkbox has been checked
+  void changeColorMode (int m);
+
 public slots:
   /// Requests the scale of the view to be adapted to the size of the scene
   void makeFit (bool autofit);

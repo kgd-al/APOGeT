@@ -22,7 +22,6 @@
  */
 
 /// NOTE Todo list
-///  FIXME Bug in survivor path
 ///  TODO Separate PTtree.config from PViewer.config
 
 namespace phylogeny {

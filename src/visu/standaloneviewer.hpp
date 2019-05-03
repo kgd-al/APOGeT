@@ -17,16 +17,32 @@ int run(int argc, char *argv[]) {
 
   auto config = PViewer::defaultConfig();
 
-  cxxopts::Options options("PTreeViewer", "Loads and displays a phenotypic tree for \""
-                           + utils::className<GENOME>() + "\" genomes");
+  std::string configFile, ptreeFile;
+  Verbosity verbosity = Verbosity::SHOW;
+  std::string outfile;
+
+  static const auto dirFromStr = [] {
+    using D = QBoxLayout::Direction;
+    QMap<QString, D> map {
+      { "LR", D::LeftToRight }, { "TB", D::TopToBottom },
+      { "RL", D::RightToLeft }, { "BT", D::BottomToTop }
+    };
+    return map;
+  }();
+  std::string layoutStr = "LR";
+
+
+  cxxopts::Options options("PTreeViewer", "Loads and displays a phenotypic tree"
+                           " for \"" + utils::className<GENOME>()
+                           + "\" genomes");
   options.add_options()
     ("h,help", "Display help")
     ("c,config", "File containing configuration data",
-     cxxopts::value<std::string>())
+     cxxopts::value(configFile))
     ("v,verbosity", "Verbosity level. " + config::verbosityValues(),
-     cxxopts::value<Verbosity>())
+     cxxopts::value(verbosity))
     ("t,tree", "File containing the phenotypic tree [MANDATORY]",
-     cxxopts::value<std::string>())
+     cxxopts::value(ptreeFile))
     ("min-survival", "Minimal survival duration",
      cxxopts::value(config.minSurvival))
     ("min-enveloppe", "Minimal fullness for the enveloppe",
@@ -36,8 +52,11 @@ int run(int argc, char *argv[]) {
      cxxopts::value(config.survivorsOnly)->default_value("false"))
     ("show-names", "Whether or not to show node names",
      cxxopts::value(config.showNames)->default_value("true"))
-    ("p,print", "Render p-tree into 'filename'", cxxopts::value<std::string>())
+    ("p,print", "Render p-tree into 'filename'", cxxopts::value(outfile))
     ("radius", "Tree rendering radius", cxxopts::value(config.rasterRadius))
+    ("layout", "Layout for the graph/controls. Valid values are "
+               + QStringList(dirFromStr.keys()).join(", ").toStdString(),
+     cxxopts::value(layoutStr))
     ;
 
   auto result = options.parse(argc, argv);
@@ -53,12 +72,6 @@ int run(int argc, char *argv[]) {
     return 1;
   }
 
-  std::string configFile;
-  if (result.count("config"))    configFile = result["config"].as<std::string>();
-
-  Verbosity verbosity = Verbosity::SHOW;
-  if (result.count("verbosity")) verbosity = result["verbosity"].as<Verbosity>();
-
   config::PTree::setupConfig(configFile, verbosity);
 
   if (!result.count("show-names"))
@@ -70,22 +83,21 @@ int run(int argc, char *argv[]) {
   if (!result.count("survivors-only"))
     config.survivorsOnly = config::PTree::survivorNodesOnly();
 
-  QString outfile;
-  if (result.count("print"))  outfile = QString::fromStdString(result["print"].as<std::string>());
-
   QApplication a(argc, argv);
   setlocale(LC_NUMERIC,"C");
 
-  PTree pt = PTree::readFrom(result["tree"].as<std::string>(), false);
-  PViewer pv (nullptr, pt, QBoxLayout::LeftToRight, config);
+  PTree pt = PTree::readFrom(ptreeFile, false);
 
-  if (outfile.isEmpty()) {
+  auto layoutDir = dirFromStr.value(QString::fromStdString(layoutStr));
+  PViewer pv (nullptr, pt, layoutDir, config);
+
+  if (outfile.empty()) {
     pv.show();
     pv.setMinimumSize(500, 500);
     return a.exec();
 
   } else {
-    pv.renderTo(outfile);
+    pv.renderTo(QString::fromStdString(outfile));
     return 0;
   }
 }

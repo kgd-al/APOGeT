@@ -8,6 +8,10 @@
 #include <QSlider>
 #include <QCheckBox>
 #include <QListWidget>
+#include <QRadioButton>
+#include <QGroupBox>
+#include <QButtonGroup>
+#include <QPushButton>
 
 #include <QStyle>
 #include <QStylePainter>
@@ -252,9 +256,42 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   toolbar->addWidget(sliderHolder);
 
   // Populate the rest of the toolbar
-  toolbar->addWidget(survivorsOnly);
-  toolbar->addWidget(showNames);
-  toolbar->addWidget(autofit);
+  auto *checkboxesHolder = new QGroupBox("Options");
+  checkboxesHolder->setFlat(true);
+  auto *checkboxesLayout = new QVBoxLayout;
+  checkboxesLayout->addWidget(survivorsOnly);
+  checkboxesLayout->addWidget(showNames);
+  checkboxesLayout->addWidget(autofit);
+  checkboxesHolder->setLayout(checkboxesLayout);
+  toolbar->addWidget(checkboxesHolder);
+
+  auto *colorHolder = new QGroupBox("Colors");
+  colorHolder->setFlat(true);
+    auto *colorGroup = new QButtonGroup;
+    auto *colorLayout = new QVBoxLayout;
+      QRadioButton *noColor = new QRadioButton("None");
+      QRadioButton *survivorsColor = new QRadioButton("Survivors");
+      auto *customColor = new QWidget;
+        QHBoxLayout *customColorLayout = new QHBoxLayout;
+        QRadioButton *customColorRadio = new QRadioButton("Custom");
+        QPushButton *customColorEdit = new QPushButton("...");
+        customColorEdit->setStyleSheet( "padding: 0px;" );
+
+  toolbar->addWidget(colorHolder);
+    colorHolder->setLayout(colorLayout);
+      colorLayout->addWidget(noColor);
+      colorLayout->addWidget(survivorsColor);
+      colorLayout->addWidget(customColor);
+      colorGroup->addButton(noColor, ViewerConfig::Colors::NONE);
+      colorGroup->addButton(survivorsColor, ViewerConfig::Colors::SURVIVORS);
+      colorGroup->addButton(customColorRadio, ViewerConfig::Colors::CUSTOM);
+      customColor->setLayout(customColorLayout);
+        customColorLayout->addWidget(customColorRadio);
+        customColorLayout->addWidget(customColorEdit);
+
+  connect(colorGroup, QOverload<int>::of(&QButtonGroup::buttonClicked),
+          this, &PhylogenyViewer_base::changeColorMode);
+
   toolbar->addAction(print);
 
   layout->addWidget(_view);
@@ -345,6 +382,10 @@ void PhylogenyViewer_base::makeFit(bool autofit) {
   if (_config.autofit)  _view->fitInView(_items.scene->sceneRect(), Qt::KeepAspectRatio);
 }
 
+void PhylogenyViewer_base::changeColorMode(int m) {
+  _config.color = ViewerConfig::Colors(m);
+  qDebug() << "New color mode: " << m;
+}
 
 // ============================================================================
 // == Phylogeny update
