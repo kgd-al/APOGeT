@@ -17,6 +17,9 @@ namespace gui {
 
 /// User-controlled variations on the base phylogeny viewer
 struct ViewerConfig {
+  Q_GADGET
+public:
+
   /// Minimal survival a species must have to be shown
   uint minSurvival = 0;
 
@@ -47,12 +50,49 @@ struct ViewerConfig {
     SURVIVORS = 1,  ///< Color survivor paths in red
     CUSTOM = 2  ///< Color path from specific species
   };
+  Q_ENUM(Colors)
   Colors color = Colors::SURVIVORS; ///< Current color mode
+
+  /// Definition of a custom coloring
+  struct ColorSpec {
+    phylogeny::SID sid; ///< SID of the colored species
+    QColor color; ///< Color defined by the user
+    bool enabled; ///< Is it currently active?
+  };
+
+  /// \cond internal
+  /// Comparison structure for custom color specifications
+  struct ColorSpecCMP {
+    using is_transparent = void;
+
+    bool operator() (phylogeny::SID lhs, phylogeny::SID rhs) const {
+      return lhs < rhs;
+    }
+
+    bool operator() (phylogeny::SID lhs, const ColorSpec &rhs) const {
+      return operator() (lhs, rhs.sid);
+    }
+
+    bool operator() (const ColorSpec &lhs, phylogeny::SID rhs) const {
+      return operator() (lhs.sid, rhs);
+    }
+
+    bool operator() (const ColorSpec &lhs, const ColorSpec &rhs) {
+      return operator() (lhs.sid, rhs.sid);
+    }
+  };
+  /// \endcond
+
+  /// Mapping for custom coloring
+  std::set<ColorSpec, ColorSpecCMP> colorSpecs;
 };
 
 /// \cond internal
 
 struct PhylogenyViewer_base;
+
+/// Helper alias to the species identificator
+using SID = phylogeny::SID;
 
 /// Constant pointer to a phylogenic tree viewer instance
 using VTree = PhylogenyViewer_base *const;
@@ -97,9 +137,6 @@ public:
 
   Visibilities visibilities;  ///< This node's current visibility values
 
-  /// Helper alias to the species identificator
-  using SID = phylogeny::SID;
-
   /// The tree owning this node
   PhylogenyViewer_base *const treeBase;
 
@@ -119,6 +156,9 @@ public:
 
   /// The graphic items corresponding to the associated species 'children'
   QVector<Node*> subnodes;
+
+  /// Current border color
+  QPen coloredPen;
 
   /// Build a graphic node out of a potential parent and PTree data
   template <typename PN>
@@ -173,6 +213,9 @@ public:
   /// Store whether the current has any alive descendant and sets the ZValue
   /// accordingly
   void setOnSurvivorPath (bool osp);
+
+  /// Update color based on the corresponding config values
+  void updateColor (void);
 
   /// \returns Whether this node has sufficient visiblity values
   bool subtreeVisible (void) const {
@@ -282,12 +325,44 @@ struct Timeline : public QGraphicsItem {
   void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
 };
 
+struct Tracker : public QGraphicsItem {  
+  VTree tree; ///< The tree whose species are tracked
+
+  /// A single tracked (or ancestor of tracked) species
+  struct TrackedSpecies {
+    const Node *species;  ///< The species in question
+    QList<TrackedSpecies*> descendants; ///< Its (in)direct descendants
+
+    QPainterPath path; ///< The region of direct influence
+    QColor color; ///< The color of influence
+
+    ~TrackedSpecies(void) {
+      for (auto *ts: descendants) delete ts;
+    }
+  };
+
+  /// The root of the tracked hierarchy tree
+  TrackedSpecies *commonAncestor;
+
+public:
+  /// Builds a species tracking drawer
+  Tracker (VTree tree);
+
+  /// \returns the same bounding rect as the graph's bounds
+  QRectF boundingRect(void) const override;
+
+  void updateTracking (void);
+
+  /// Paints the paths for the various tracked species
+  void paint (QPainter *painter, const QStyleOptionGraphicsItem*,
+              QWidget*) override;
+
+private:
+  void paint (QPainter *painter, const TrackedSpecies *ts);
+};
+
 /// Graphics item displaying a node's contributor
 struct Contributors : public QGraphicsItem {
-
-  /// Helper alias to the species identificator
-  using SID = phylogeny::SID;
-
   VTree tree; ///< The tree whose contributions this draws
 
   /// Identificator of a path between two nodes
@@ -332,7 +407,8 @@ struct Contributors : public QGraphicsItem {
   QRectF boundingRect(void) const override;
 
   /// Paints the paths to the various contributors
-  void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
+  void paint (QPainter *painter, const QStyleOptionGraphicsItem*,
+              QWidget*) override;
 
 private:
   /// \returns the identificator for the given path
@@ -435,13 +511,16 @@ struct GUIItems {
   Border *border; ///< Border & legend manager
   Node *root; ///< Root of the graph's tree
 
+  /// Species tracking drawer
+  Tracker *tracker;
+
   /// Species contributions drawer
   Contributors *contributors;
 
   /// Clipping dimmer
   Dimmer *dimmer;
 
-  QMap<Node::SID, Node*> nodes;  ///< Lookup table for the graphics nodes
+  QMap<SID, Node*> nodes;  ///< Lookup table for the graphics nodes
 
   QMap<details::PenType, QPen> pens;  ///< Collection of pens
 };
@@ -488,6 +567,9 @@ struct PTGraphBuilder {
       addSpecies(nullptr, *root, cache);
 
     cache.items.border->setEmpty(!bool(pt.root()));
+
+    cache.items.tracker = new Tracker (cache.tree);
+    cache.items.scene->addItem(cache.items.tracker);
 
     cache.items.contributors = new Contributors(cache.tree);
     cache.items.scene->addItem(cache.items.contributors);

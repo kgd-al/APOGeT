@@ -106,6 +106,8 @@ if (NOT CLUSTER_BUILD)
         "src/visu/ptgraphbuilder.h"
         "src/visu/ptgraphbuilder.cpp"
         "src/visu/phylogenyviewer.cpp"
+        "src/visu/speciestracking.h"
+        "src/visu/speciestracking.cpp"
         "src/visu/graphicsviewzoom.h"
         "src/visu/graphicsviewzoom.cpp"
         "src/visu/graphicutils.h"

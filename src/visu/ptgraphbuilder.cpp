@@ -2,6 +2,8 @@
 
 #include <QPainter>
 #include <QToolTip>
+
+#include <QVector3D>
 #include <qmath.h>
 
 /// \todo remove
@@ -48,7 +50,9 @@ static constexpr int TIMELINE_SURVIVOR_LEVEL = -6;
 static constexpr int PATH_EXTINCT_LEVEL = -10;
 static constexpr int TIMELINE_EXTINCT_LEVEL = -11;
 
-static constexpr int BOUNDS_LEVEL = -20;
+static constexpr int STRACKING_LEVEL = -20;
+
+static constexpr int BOUNDS_LEVEL = -30;
 
 // == Paint style ===================================================
 
@@ -64,6 +68,30 @@ static constexpr Qt::GlobalColor PATH_CONTRIBUTOR_COLOR = Qt::green;
 // == Coordinate computation
 // ============================================================================
 
+struct PolarF {
+  double a, r;
+};
+
+double angle (const QPointF &p) {
+  return std::atan2(p.y(), p.x());
+}
+
+double radius (const QPointF &p) {
+  return std::sqrt(p.x()*p.x() + p.y()*p.y());
+}
+
+PolarF toPolar (const QPointF &p) {
+  return PolarF { angle(p), radius(p) };
+}
+
+QPointF toCartesian (double a, double r) {
+  return r * QPointF(cos(a), sin(a));
+}
+
+QPointF toCartesian (const PolarF &p) {
+  return toCartesian(p.a, p.r);
+}
+
 /// Generates and manages polar coordinates for the nodes/paths
 struct PolarCoordinates {
 
@@ -76,21 +104,21 @@ struct PolarCoordinates {
   uint nextX; ///< X coordinate of the next node
 
   /// \returns The angle for \p in the range [phase,2&pi;+phase]
-  static double primaryAngle (const QPointF &p) {
-    if (p.isNull()) return phase;
-    double a = atan2(p.y(), p.x());
+  static double primaryAngle (double a) {
     while (a < phase) a += 2 * M_PI;
     while (a > 2 * M_PI + phase) a -= 2 * M_PI;
     return a;
   }
 
+  /// \returns The angle for \p in the range [phase,2&pi;+phase]
+  static double primaryAngle (const QPointF &p) {
+    if (p.isNull()) return phase;
+    return primaryAngle(atan2(p.y(), p.x()));
+  }
+
   /// \returns The euclidian distance of \p p with the origin
   static double length (const QPointF &p) {
     return sqrt(p.x()*p.x() + p.y()*p.y());
-  }
-
-  static QPointF toCartesian (double a, double r) {
-    return r * QPointF(cos(a), sin(a));
   }
 
   /// \returns the coordinate of node number \p i
@@ -115,21 +143,25 @@ struct PolarCoordinates {
 // == Utilities
 // ============================================================================
 
-QPainterPath makeArc (const QPointF &p0, const QPointF &p1) {
-  double a0 = PolarCoordinates::primaryAngle(p0);
+QPainterPath& addArc (QPainterPath &p, const QPointF &p1, int sign = 1) {
+  double a0 = PolarCoordinates::primaryAngle(p.currentPosition());
   double a1 = PolarCoordinates::primaryAngle(p1);
   double r1 = PolarCoordinates::length(p1);
 
-  QPainterPath path;
-  path.moveTo(p1);
-  path.arcTo(QRect(-r1, -r1, 2*r1, 2*r1), -qRadiansToDegrees(a1),
-             qRadiansToDegrees(a1 - a0));
+  p.arcTo(QRect(-r1, -r1, 2*r1, 2*r1), -qRadiansToDegrees(a0),
+          qRadiansToDegrees(sign*(a0 - a1)));
 
-  return path;
+  return p;
+}
+
+QPainterPath makeArc (const QPointF &p0, const QPointF &p1) {
+  QPainterPath path;
+  path.moveTo(p0);
+  return addArc(path, p1);
 }
 
 QPointF timelineAnchor (const Node *n) {
-  return PolarCoordinates::toCartesian(
+  return toCartesian(
     PolarCoordinates::primaryAngle(n->parent->scenePos()),
     PolarCoordinates::length(n->scenePos()));
 }
@@ -229,6 +261,22 @@ void Node::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) {
   treeBase->doubleClickEvent(*this, e);
 }
 
+void Node::updateColor(void) {
+  const auto &config = treeBase->config();
+  coloredPen.setColor(PATH_DEFAULT_COLOR);
+  if (config.color == ViewerConfig::SURVIVORS && _onSurvivorPath)
+    coloredPen.setColor(PATH_SURVIVOR_COLOR);
+  else if (config.color == ViewerConfig::CUSTOM) {
+    /// TODO could be improved. See GUIItems::nodes
+    auto it = config.colorSpecs.find(id);
+    if (it != config.colorSpecs.end())
+      coloredPen.setColor(it->color);
+  }
+  update();
+  timeline->update();
+  if (path) path->update();
+}
+
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
   if (debugDrawAABB) {
     painter->save();
@@ -259,7 +307,7 @@ void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) 
       painter->drawText(r, Qt::AlignCenter, sid, &bounds);
 
       painter->setBrush(Qt::white);
-      painter->setPen(_onSurvivorPath ? Qt::red : Qt::black);
+      painter->setPen(coloredPen);
       painter->drawEllipse(boundingRect().center(), NODE_RADIUS, NODE_RADIUS);
 
       // Scale and do paint
@@ -316,9 +364,9 @@ void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
     painter->restore();
   }
 
-  painter->setPen(start->treeBase->pathPen(
-                    end->onSurvivorPath() ? details::PATH_SURVIVOR
-                                          : details::PATH_BASE));
+  QPen pen = end->treeBase->pathPen(details::PATH_BASE);
+  pen.setColor(end->coloredPen.color());
+  painter->setPen(pen);
   painter->drawPath(_shape);
 }
 
@@ -382,7 +430,9 @@ void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidge
   }
 
   if (points[0] != points[1]) {
-    painter->setPen(node->treeBase->pathPen(details::PATH_SURVIVOR));
+    QPen pen = node->treeBase->pathPen(details::PATH_BASE);
+    pen.setColor(node->coloredPen.color());
+    painter->setPen(pen);
     painter->drawLine(points[0], points[1]);
   }
 
@@ -395,6 +445,209 @@ void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidge
   painter->drawEllipse(points[2], END_POINT_SIZE, END_POINT_SIZE);
 }
 
+
+// ============================================================================
+// == Species tracking drawer
+// ============================================================================
+
+Tracker::Tracker (VTree tree) : tree(tree), commonAncestor(nullptr) {
+  setZValue(STRACKING_LEVEL);
+}
+
+QRectF Tracker::boundingRect(void) const {
+  return tree->boundingRect();
+}
+
+struct Span {
+  double a;
+  uint r;
+
+  Span (double angle, uint radius)
+    : a(PolarCoordinates::primaryAngle(angle)), r(radius) {}
+
+  Span (const Node *n) : Span(toPolar(n->pos()).a, n->disappearance()) {}
+
+  static Span extract (const Node *n) {
+    Span s (n);
+    for (const Node *c: n->subnodes)
+      if (c->isVisible())
+        s = max(s, extract(c));
+    return s;
+  }
+
+  friend Span max (const Span &lhs, const Span &rhs) {
+    return Span(std::max(lhs.a, rhs.a), std::max(lhs.r, rhs.r) );
+  }
+};
+
+QVector3D toV3D (const QColor &c) {
+  return QVector3D(c.redF(), c.greenF(), c.blueF());
+}
+
+QColor toColor (const QVector3D &v) {
+  return QColor::fromRgbF(v[0], v[1], v[2]);
+}
+
+QPainterPath buildPath (const Node *n) {
+  QPainterPath path;
+
+  QPointF startC = n->pos();
+  path.moveTo(startC);
+
+  Span span = Span::extract(n);
+  path.lineTo(toCartesian(angle(n->timeline->points[2]), span.r));
+  addArc(path, toCartesian(span.a, span.r), 1);
+  path.lineTo(toCartesian(angle(path.currentPosition()), radius(startC)));
+  addArc(path, startC);
+
+  return path;
+}
+
+struct AncestryNode {
+  const Node *node;
+
+  AncestryNode *parent = nullptr;
+  std::set<AncestryNode*> children;
+
+  bool monitored = false;
+};
+
+template<typename SN, typename AN>
+void buildAncestries (SN &specsNodes, AN &anodes,
+                      AncestryNode **root, const Node *n) {
+
+  if (n->parent)  buildAncestries(specsNodes, anodes, root, n->parent);
+  if (anodes.find(n) == anodes.end()) {
+    AncestryNode *an = new AncestryNode;
+    an->node = n;
+
+    if (n->parent) {
+      an->parent = anodes.value(n->parent, nullptr);
+      an->parent->children.insert(an);
+
+    } else
+      *root = an;
+
+    auto it = specsNodes.find(n);
+    if (it != specsNodes.end()) {
+      an->monitored = true;
+      specsNodes.erase(it);
+    }
+
+    anodes[n] = an;
+  }
+}
+
+/// TODO Remove
+void debugPrintAncestry (const AncestryNode *n, uint depth) {
+  {
+    auto q = qDebug().noquote().nospace();
+    q << QString(depth*2, ' ');
+    if (n->monitored)  q << "[";
+    q << n->node->sid;
+    if (n->monitored)  q << "]";
+  }
+  for (const AncestryNode *c: n->children)  debugPrintAncestry(c, depth+1);
+}
+
+AncestryNode* simplify (AncestryNode *n) {
+  if (!n->monitored && n->children.size() == 1) {
+    AncestryNode *c = *n->children.begin();
+    c->parent = n->parent;
+    if (n->parent)  n->parent->children.insert(c);
+    return simplify(c);
+  } else {
+    decltype(n->children) children;
+    for (AncestryNode *c: n->children)
+      children.insert(simplify(c));
+    n->children = children;
+    return n;
+  }
+}
+
+Tracker::TrackedSpecies* buildRenderingTree (const AncestryNode *n,
+                                             const ViewerConfig &config) {
+  const auto &specs = config.colorSpecs;
+
+  auto *ts = new Tracker::TrackedSpecies;
+  ts->species = n->node;
+
+  ts->path = buildPath(ts->species);
+
+  QVector3D color;
+  for (const AncestryNode *c: n->children) {
+    auto d = buildRenderingTree(c, config);
+    ts->descendants.append(d);
+    color += toV3D(d->color);
+  }
+
+  auto it = specs.find(ts->species->id);
+  if (it != specs.end())  ts->color = it->color;
+  else if (!ts->descendants.empty()) {
+    color /= ts->descendants.size();
+    qDebug() << "Color for " << ts->species->sid << ": " << color;
+    ts->color = toColor(color);
+  }
+
+  return ts;
+}
+
+void Tracker::updateTracking(void) {
+  const auto &config = tree->config();
+  if (config.color == ViewerConfig::CUSTOM) {
+    const auto &specs = config.colorSpecs;
+    const auto &nodes = tree->items().nodes;
+
+    // Erase tracking data
+    if (commonAncestor) delete commonAncestor;
+
+    // Find common ancestries
+    std::set<const Node*> specsNodes;
+    for (const auto &spec: specs)
+      if (spec.enabled)
+        specsNodes.insert(nodes.value(spec.sid));
+
+    AncestryNode *root = nullptr;
+    QMap<const Node*, AncestryNode*> anodes;
+    while (!specsNodes.empty())
+      buildAncestries(specsNodes, anodes, &root, *specsNodes.begin());
+
+    qDebug() << "Obtained ancestry:";
+    debugPrintAncestry(root, 0);
+
+    root = simplify(root);
+
+    qDebug() << "Simplified ancestry:";
+    debugPrintAncestry(root, 0);
+
+    commonAncestor = buildRenderingTree(root, config);
+  }
+}
+
+void Tracker::paint (QPainter *painter, const TrackedSpecies *ts) {
+  painter->save();
+    QPen pen = tree->pathPen(details::PATH_BASE);
+    pen.setWidthF(.5 * pen.widthF());
+    pen.setColor(ts->color);
+    painter->setPen(pen);
+    QColor fillColor = ts->color;
+    fillColor.setAlphaF(.25);
+    painter->setBrush(fillColor);
+
+    painter->drawPath(ts->path);
+  painter->restore();
+
+  for (const auto *ts_: ts->descendants)  paint(painter, ts_);
+}
+
+void Tracker::paint (QPainter *painter,
+                     const QStyleOptionGraphicsItem*, QWidget*) {
+  if (!commonAncestor)  return;
+  painter->save();
+//    painter->setCompositionMode(QPainter::CompositionMode_Source);
+    paint(painter, commonAncestor);
+  painter->restore();
+}
 
 // ============================================================================
 // == Species contributions drawer

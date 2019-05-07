@@ -65,9 +65,25 @@ public:
     return _items.pens.value(t);
   }
 
+  /// \returns the current configuration
+  const auto& config (void) const {
+    return _config;
+  }
+
+  /// \returns the gui items
+  const auto& items (void) const {
+    return _items;
+  }
+
   /// \return the default configuration
   static auto defaultConfig (void) {
     return Config{};
+  }
+
+  /// Apply observer function \p f to all of the scene's current nodes
+  template <typename F>
+  void observeNodes (F f) const {
+    for (const Node *n: _items.nodes) f(n);
   }
 
 signals:
@@ -129,8 +145,9 @@ protected slots:
   /// \copydoc toggleShowOnlySurvivors
   void toggleShowNames (void);
 
-  /// Called when a different color checkbox has been checked
-  void changeColorMode (int m);
+  /// Called when a different color checkbox has been checked.
+  ///  Or just to update the display with new data
+  void changeColorMode (int m = -1);
 
 public slots:
   /// Requests the scale of the view to be adapted to the size of the scene
@@ -237,6 +254,8 @@ public:
     constructorDelegate(step, direction);
 
     build();
+
+    changeColorMode(_config.color);
   }
 
   /// Helper function for getting a tree building cache

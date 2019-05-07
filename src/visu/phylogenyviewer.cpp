@@ -8,10 +8,10 @@
 #include <QSlider>
 #include <QCheckBox>
 #include <QListWidget>
-#include <QRadioButton>
 #include <QGroupBox>
-#include <QButtonGroup>
-#include <QPushButton>
+#include <QMetaEnum>
+#include <QToolButton>
+#include <QComboBox>
 
 #include <QStyle>
 #include <QStylePainter>
@@ -35,6 +35,7 @@
 #include "phylogenyviewer.h"
 #include "graphicutils.h"
 #include "graphicsviewzoom.h"
+#include "speciestracking.h"
 
 /*!
  * \file phylogenyviewer.cpp
@@ -146,7 +147,8 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   _items = {
     false,
     new QGraphicsScene(this),
-    nullptr, nullptr, nullptr, nullptr,
+    nullptr, nullptr,
+    nullptr, nullptr, nullptr,
     {},
     PTGraphBuilder::buildPenSet()
   };
@@ -223,7 +225,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
           this, &PhylogenyViewer_base::toggleShowOnlySurvivors);
 
   // Show names checkbox
-  QCheckBox *showNames = new QCheckBox("Show names");
+  QCheckBox *showNames = new QCheckBox("Names");
   showNames->setChecked(_config.showNames);
   connect(showNames, &QCheckBox::toggled,
           this, &PhylogenyViewer_base::toggleShowNames);
@@ -256,7 +258,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   toolbar->addWidget(sliderHolder);
 
   // Populate the rest of the toolbar
-  auto *checkboxesHolder = new QGroupBox("Options");
+  auto *checkboxesHolder = new QGroupBox("Display");
   checkboxesHolder->setFlat(true);
   auto *checkboxesLayout = new QVBoxLayout;
   checkboxesLayout->addWidget(survivorsOnly);
@@ -265,33 +267,71 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   checkboxesHolder->setLayout(checkboxesLayout);
   toolbar->addWidget(checkboxesHolder);
 
+  // Color model
+  static const auto getColorModels = [] {
+    const QMetaEnum e = QMetaEnum::fromType<ViewerConfig::Colors>();
+    QStringList l;
+    for (int i=0; i<e.keyCount(); i++) {
+      QString key = e.key(i);
+      key = key.at(0) + key.mid(1).toLower();
+      l << key;
+    }
+    return l;
+  };
+
+  // Color model choice
   auto *colorHolder = new QGroupBox("Colors");
   colorHolder->setFlat(true);
-    auto *colorGroup = new QButtonGroup;
-    auto *colorLayout = new QVBoxLayout;
-      QRadioButton *noColor = new QRadioButton("None");
-      QRadioButton *survivorsColor = new QRadioButton("Survivors");
-      auto *customColor = new QWidget;
-        QHBoxLayout *customColorLayout = new QHBoxLayout;
-        QRadioButton *customColorRadio = new QRadioButton("Custom");
-        QPushButton *customColorEdit = new QPushButton("...");
-        customColorEdit->setStyleSheet( "padding: 0px;" );
+    auto *colorLayout = new QHBoxLayout;
+      auto *colorComboBox = new QComboBox;
+      colorComboBox->addItems(getColorModels());
+      auto *colorEdit = new QToolButton;
+      colorEdit->setIcon(
+        style()->standardPixmap(QStyle::SP_ToolBarHorizontalExtensionButton));
+      colorEdit->setStyleSheet("padding: 1px;");
+      colorEdit->setToolTip("Specify colors");
 
   toolbar->addWidget(colorHolder);
     colorHolder->setLayout(colorLayout);
-      colorLayout->addWidget(noColor);
-      colorLayout->addWidget(survivorsColor);
-      colorLayout->addWidget(customColor);
-      colorGroup->addButton(noColor, ViewerConfig::Colors::NONE);
-      colorGroup->addButton(survivorsColor, ViewerConfig::Colors::SURVIVORS);
-      colorGroup->addButton(customColorRadio, ViewerConfig::Colors::CUSTOM);
-      customColor->setLayout(customColorLayout);
-        customColorLayout->addWidget(customColorRadio);
-        customColorLayout->addWidget(customColorEdit);
+      colorLayout->addWidget(colorComboBox);
+      colorLayout->addWidget(colorEdit);
 
-  connect(colorGroup, QOverload<int>::of(&QButtonGroup::buttonClicked),
-          this, &PhylogenyViewer_base::changeColorMode);
 
+  _config.color = ViewerConfig::CUSTOM;
+  qDebug() << "Overriden default value for color mode: " << _config.color;
+
+  _config.colorSpecs = {
+    { SID(487), QColor(Qt::green), true },
+    { SID(489), QColor(Qt::blue), true },
+//    { SID(3890), species_tracking::ColorDelegate::nextColor(0), true },
+//    { SID(4100), species_tracking::ColorDelegate::nextColor(1), true },
+//    { SID(489), species_tracking::ColorDelegate::nextColor(2), false },
+//    { SID(4043), species_tracking::ColorDelegate::nextColor(3), true },
+//    { SID(3753), species_tracking::ColorDelegate::nextColor(4), false },
+//    { SID(4205), species_tracking::ColorDelegate::nextColor(5), false },
+  };
+
+  connect(colorComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          [this, colorComboBox, colorEdit] (int index) {
+    colorEdit->setEnabled(index == ViewerConfig::CUSTOM);
+    changeColorMode(index);
+  });
+  colorComboBox->setCurrentIndex(_config.color);
+
+  connect(colorEdit, &QToolButton::clicked, [this,colorEdit] {
+    using namespace species_tracking;
+    Dialog colorsPicker (this, _config.colorSpecs);
+    const auto apply = [this, &colorsPicker] {
+      _config.colorSpecs = colorsPicker.colorSelection();
+      changeColorMode(_config.color);
+    };
+
+    connect(&colorsPicker, &Dialog::applied, apply);
+    if (QDialog::Accepted == colorsPicker.exec())
+        apply();
+  });
+
+  // Simple actions
   toolbar->addAction(print);
 
   layout->addWidget(_view);
@@ -303,7 +343,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
     autofit->setChecked(false);
   });
 
-  setWindowTitle("Phenotypic tree");
+  setWindowTitle("Phylogenetic tree");
 }
 
 void PhylogenyViewer_base::render(uint step) {
@@ -330,6 +370,7 @@ void PhylogenyViewer_base::toggleShowOnlySurvivors(void) {
     n->setVisible(Node::SURVIVORS, !_config.survivorsOnly || n->onSurvivorPath());
   });
   updateLayout();
+  changeColorMode();
 }
 
 void PhylogenyViewer_base::updateMinSurvival(uint v) {
@@ -383,8 +424,27 @@ void PhylogenyViewer_base::makeFit(bool autofit) {
 }
 
 void PhylogenyViewer_base::changeColorMode(int m) {
-  _config.color = ViewerConfig::Colors(m);
-  qDebug() << "New color mode: " << m;
+  if (m >= 0) {
+    _config.color = ViewerConfig::Colors(m);
+    qDebug() << "New color mode: " << m;
+
+    if (m == ViewerConfig::CUSTOM) {
+      qDebug() << "Color specs: {";
+      for (const auto &cs: _config.colorSpecs)
+        qDebug() << "\t" << uint(cs.sid) << ": " << cs.color << " (" << cs.enabled << ")";
+      qDebug() << "}";
+    }
+
+    updateNodes([this] (Node *n) {
+      n->updateColor();
+    });
+  }
+
+  if (_items.tracker) {
+    bool visible = (_config.color == ViewerConfig::CUSTOM);
+    _items.tracker->setVisible(visible);
+    if (visible)  _items.tracker->updateTracking();
+  }
 }
 
 // ============================================================================
@@ -584,4 +644,4 @@ void PhylogenyViewer_base::renderToSVG(const QString &filename) const {
 }
 #endif
 
-}
+} // end of namespace gui
