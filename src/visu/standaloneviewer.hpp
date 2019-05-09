@@ -9,6 +9,11 @@
 
 #include "phylogenyviewer.h"
 
+
+/// TODO REMOVE
+#include <QDebug>
+
+
 template <typename GENOME, typename UDATA>
 int run(int argc, char *argv[]) {
   using PTree = phylogeny::PhylogeneticTree<GENOME, UDATA>;
@@ -31,6 +36,7 @@ int run(int argc, char *argv[]) {
   }();
   std::string layoutStr = "LR";
 
+  std::string customColors;
 
   cxxopts::Options options("PTreeViewer", "Loads and displays a phenotypic tree"
                            " for \"" + utils::className<GENOME>()
@@ -57,6 +63,8 @@ int run(int argc, char *argv[]) {
     ("layout", "Layout for the graph/controls. Valid values are "
                + QStringList(dirFromStr.keys()).join(", ").toStdString(),
      cxxopts::value(layoutStr))
+    ("colors", "Custom colors for species tracking ID1:Color1 ID2:Color2 ...",
+     cxxopts::value(customColors))
     ;
 
   auto result = options.parse(argc, argv);
@@ -82,6 +90,33 @@ int run(int argc, char *argv[]) {
     config.minEnveloppe = config::PTree::minNodeEnveloppe();
   if (!result.count("survivors-only"))
     config.survivorsOnly = config::PTree::survivorNodesOnly();
+
+  if (!customColors.empty()) {
+    config.color = gui::ViewerConfig::CUSTOM;
+    for (const std::string sspec: utils::split(customColors, ' ')) {
+      std::stringstream ss (sspec);
+      char c;
+      uint sid;
+      std::string scolor;
+
+      ss >> sid >> c >> scolor;
+      if (ss)
+        config.colorSpecs.insert({
+          phylogeny::SID(sid), QColor(QString::fromStdString(scolor)), true
+        });
+      else
+        std::cerr << "Failed to parse color spec '" << sspec << "'. Ignoring..."
+                  << std::endl;
+    }
+//    std::cout << "Parsed custom colors:\n";
+//    for (const auto &spec: config.colorSpecs)
+//      std::cout << "{" << spec.sid << " {"
+//                  << spec.color.red() << ","
+//                  << spec.color.green() << ","
+//                  << spec.color.blue()
+//                << "}, " << spec.enabled << "}\n";
+//    std::cout << std::endl;
+  }
 
   QApplication a(argc, argv);
   setlocale(LC_NUMERIC,"C");

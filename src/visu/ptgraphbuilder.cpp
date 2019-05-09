@@ -175,6 +175,12 @@ QRectF Node::boundingRect(void) const {
   return QRectF(-.5*NODE_SIZE, -.5*NODE_SIZE, NODE_SIZE, NODE_SIZE);
 }
 
+QPainterPath Node::shape (void) const {
+  QPainterPath p;
+  p.addEllipse(boundingRect());
+  return p;
+}
+
 void Node::invalidate(const QPointF &newPos) {
   setPos(newPos);
   if (path) path->invalidatePath();
@@ -261,6 +267,10 @@ void Node::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) {
   treeBase->doubleClickEvent(*this, e);
 }
 
+void Node::contextMenuEvent(QGraphicsSceneContextMenuEvent *e) {
+  treeBase->contextMenuEvent(*this, e);
+}
+
 void Node::updateColor(void) {
   const auto &config = treeBase->config();
   coloredPen.setColor(PATH_DEFAULT_COLOR);
@@ -280,11 +290,11 @@ void Node::updateColor(void) {
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
   if (debugDrawAABB) {
     painter->save();
-    QPen pen = painter->pen();
-    pen.setColor(Qt::blue);
-    pen.setWidthF(0);
-    painter->setPen(pen);
-    painter->drawRect(boundingRect());
+      QPen pen = painter->pen();
+      pen.setColor(Qt::blue);
+      pen.setWidthF(0);
+      painter->setPen(pen);
+      painter->drawRect(boundingRect());
     painter->restore();
   }
 
@@ -579,13 +589,13 @@ Tracker::TrackedSpecies* buildRenderingTree (const AncestryNode *n,
     auto d = buildRenderingTree(c, config);
     ts->descendants.append(d);
     color += toV3D(d->color);
+    ts->path = ts->path.subtracted(d->path);
   }
 
   auto it = specs.find(ts->species->id);
   if (it != specs.end())  ts->color = it->color;
   else if (!ts->descendants.empty()) {
     color /= ts->descendants.size();
-    qDebug() << "Color for " << ts->species->sid << ": " << color;
     ts->color = toColor(color);
   }
 
@@ -600,27 +610,56 @@ void Tracker::updateTracking(void) {
 
     // Erase tracking data
     if (commonAncestor) delete commonAncestor;
+    commonAncestor = nullptr;
+
+    // Don't bother if it's empty
+    uint activeSpecs = 0;
+    for (const auto &spec: specs) activeSpecs += spec.enabled;
+    if (!activeSpecs)  return;
 
     // Find common ancestries
     std::set<const Node*> specsNodes;
-    for (const auto &spec: specs)
-      if (spec.enabled)
-        specsNodes.insert(nodes.value(spec.sid));
+    for (const auto &spec: specs) {
+      if (!spec.enabled)  continue;
+
+      Node *n = nodes.value(spec.sid);
+      if (!n) {
+        std::cerr << "Could not find a gui::Node for species " << spec.sid
+                  << ". Will be skipped." << std::endl;
+        continue;
+      }
+
+      if (!n->isVisible()) {
+        std::cerr << "Species " << spec.sid << " is hidden!" << std::endl;
+        continue;
+      }
+
+      specsNodes.insert(n);
+    }
+
+    if (specsNodes.empty()) {
+      std::cerr << "Specs pre-processing resulted in no visible, valid nodes"
+                << std::endl;
+      return;
+    }
 
     AncestryNode *root = nullptr;
     QMap<const Node*, AncestryNode*> anodes;
     while (!specsNodes.empty())
       buildAncestries(specsNodes, anodes, &root, *specsNodes.begin());
 
-    qDebug() << "Obtained ancestry:";
-    debugPrintAncestry(root, 0);
+//    qDebug() << "Obtained ancestry:";
+//    debugPrintAncestry(root, 0);
 
     root = simplify(root);
 
-    qDebug() << "Simplified ancestry:";
-    debugPrintAncestry(root, 0);
+//    qDebug() << "Simplified ancestry:";
+//    debugPrintAncestry(root, 0);
 
     commonAncestor = buildRenderingTree(root, config);
+
+    // clean up
+    for (AncestryNode *n: anodes) delete n;
   }
 }
 
@@ -643,10 +682,7 @@ void Tracker::paint (QPainter *painter, const TrackedSpecies *ts) {
 void Tracker::paint (QPainter *painter,
                      const QStyleOptionGraphicsItem*, QWidget*) {
   if (!commonAncestor)  return;
-  painter->save();
-//    painter->setCompositionMode(QPainter::CompositionMode_Source);
-    paint(painter, commonAncestor);
-  painter->restore();
+  paint(painter, commonAncestor);
 }
 
 // ============================================================================
@@ -699,8 +735,12 @@ void Contributors::verticalPath(Node *n0, Node *n1, float w) {
 
   QVector<T> points;
   int m = std::min(ni0, ni1), M = std::max(ni0, ni1);
-  for (int ni = m; ni <= M; ni++)
-    points.append(T{uint(nodes[ni]->id), timelineAnchor(nodes[ni])});
+  for (int ni = m; ni <= M; ni++) {
+    const auto &n = nodes[ni];
+    if (n->isVisible()) {
+      points.append(T{uint(n->id), timelineAnchor(n)});
+    }
+  }
 
   if (!n1 || n0->parent != n1->parent)
     points.append(T{uint(parent->id), parent->scenePos()});
@@ -743,69 +783,86 @@ void Contributors::show (SID sid, const GUIItems &items,
   paths.clear();
   labels.clear();
 
-  // Total contribution count (excluding itself)
-  float totalWidth = 0;
-  for (auto &c: contribs)
-    if (c.speciesID() != sid)  totalWidth += c.count();
-
-  uint unaccounted = 0;
+  // Total contribution count (excluding itself and hidden/missing nodes)
+  struct { float missing = 0, hidden = 0, self = 0, found = 0; } ccounts;
+  for (auto &c: contribs) {
+    const auto &nc = items.nodes.value(c.speciesID());
+    if (c.speciesID() == sid)   ccounts.self = c.count();
+    else if (!nc)               ccounts.missing += c.count();
+    else if (!nc->isVisible())  ccounts.hidden += c.count();
+    else                        ccounts.found += c.count();
+  }
 
   // Start parsing individual contributions
   for (auto &c: contribs) {
     if (c.speciesID() == sid) continue;
 
-    float w = c.count() / totalWidth;
+    float w = c.count() / ccounts.found;
     Node *nc = items.nodes.value(c.speciesID());
-    if (nc) {
-      // Store label
-      QPoint labelPos = nc->scenePos().toPoint();
-      labelPos.setX(labelPos.x() + .025*R);
-      QString label = QString::number(100 * w, 'f', 2) + "%";
-      labels.append(QPair<QPointF, QString>(labelPos, label));
+    if (!nc)  continue;
+    if (!nc->isVisible())  continue;
 
-      Node *n_ = nullptr; // iterator
-
-      // Find path from contributor to common ancestor
-      n_ = nc;
-      Node *ca = nc;
-      auto it = std::find(np.begin(), np.end(), n_);
-      while (it == np.end()) {  // Common ancestor not found
-        it = std::find(np.begin(), np.end(), n_->parent);
-        makePath(n_, w, it == np.end());
-
-        ca = n_;
-        n_ = n_->parent;
-        assert(n_);
-      }
-      assert(ca);
-
-      Node *commonAncestor = n_;
-
-      // Find path from node to common ancestor
-      n_ = n;
-      Node *na = n;
-      while (n_ != commonAncestor) {
-        makePath(n_, w, n_->parent != commonAncestor);
-
-        na = n_;
-        n_ = n_->parent;
-        assert(n_);
-      }
-      assert(na);
-
-      // Connect paths
-      verticalPath(ca, na, w);
-    } else
-      unaccounted += c.count();
-  }
-
-  if (unaccounted > 0) {
-    QPoint labelPos = n->scenePos().toPoint();
+    // Store label
+    QPoint labelPos = nc->scenePos().toPoint();
     labelPos.setX(labelPos.x() + .025*R);
-    QString label = QString::number(100. * unaccounted / totalWidth, 'f', 2)
-                    + "% unaccounted";
+    QString label = QString::number(100 * w, 'f', 2) + "%";
     labels.append(QPair<QPointF, QString>(labelPos, label));
+
+    Node *n_ = nullptr; // iterator
+
+    // Find path from contributor to common ancestor
+    n_ = nc;
+    Node *ca = nc;
+    auto it = std::find(np.begin(), np.end(), n_);
+    while (it == np.end()) {  // Common ancestor not found
+      it = std::find(np.begin(), np.end(), n_->parent);
+      makePath(n_, w, it == np.end());
+
+      ca = n_;
+      n_ = n_->parent;
+      assert(n_);
+    }
+    assert(ca);
+
+    Node *commonAncestor = n_;
+
+    // Find path from node to common ancestor
+    n_ = n;
+    Node *na = n;
+    while (n_ != commonAncestor) {
+      makePath(n_, w, n_->parent != commonAncestor);
+
+      na = n_;
+      n_ = n_->parent;
+      assert(n_);
+    }
+    assert(na);
+
+    // Connect paths
+    verticalPath(ca, na, w);
   }
+
+  float totalExternal = ccounts.missing + ccounts.hidden + ccounts.found;
+  float total = ccounts.self + totalExternal;
+  QPoint labelPos = n->scenePos().toPoint();
+  labelPos.setX(labelPos.x() + .025*R);
+  QString label;
+  QTextStream qts (&label);
+  qts.setRealNumberNotation(QTextStream::FixedNotation);
+  qts.setRealNumberPrecision(2);
+#define PUT(X)  qSetFieldWidth(5) << 100. * X << qSetFieldWidth(0)
+
+  if (ccounts.self > 0)
+    qts << "internal: " << PUT(ccounts.self / total) << "%\n";
+  if (totalExternal > 0)
+    qts << "external: " << PUT(totalExternal / total) << "%\n";
+  if (ccounts.missing > 0)
+    qts << "- missing: " << PUT(ccounts.missing / totalExternal) << "%\n";
+  if (ccounts.hidden > 0)
+    qts << "-  hidden: " << PUT(ccounts.hidden / totalExternal) << "%\n";
+  if (ccounts.found > 0)
+    qts << "-   shown: " << PUT(ccounts.found / totalExternal) << "%\n";
+  labels.append(QPair<QPointF, QString>(labelPos, label));
 
   QGraphicsItem::show();
   update();
@@ -849,7 +906,18 @@ void Contributors::paint (QPainter *painter,
     painter->setBackground(Qt::white);
     painter->setBackgroundMode(Qt::OpaqueMode);
     for (const auto &l: labels) {
-      painter->drawText(l.first, l.second);
+      if (!l.second.contains('\n'))
+        painter->drawText(l.first, l.second);
+      else {
+        static const auto align = Qt::AlignVCenter | Qt::AlignLeft;
+        // First find optimal drawing size
+        painter->setPen(Qt::transparent);
+        QRectF lbounds (l.first, QSize(10,10));
+        painter->drawText(lbounds, align, l.second, &lbounds);
+        // Actually draw (centered) text
+        painter->setPen(pen);
+        painter->drawText(lbounds, align, l.second);
+      }
     }
 
   painter->restore();

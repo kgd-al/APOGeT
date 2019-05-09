@@ -6,6 +6,7 @@
 #include <QTableView>
 #include <QStandardItemModel>
 #include <QDialogButtonBox>
+#include <QColorDialog>
 
 #include "ptgraphbuilder.h"
 
@@ -50,6 +51,11 @@ public:
 
   static auto nextColor (int i) {
     return defaultColors.at(i % defaultColors.size());
+  }
+
+  static void setupColorDialog (QColorDialog &cd) {
+    for (int i=0; i<defaultColors.size(); i++)
+      cd.setCustomColor(i, defaultColors.at(i));
   }
 
   void paint(QPainter *painter, const QStyleOptionViewItem &option,

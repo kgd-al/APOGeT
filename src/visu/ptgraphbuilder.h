@@ -263,8 +263,13 @@ public:
   /// Requests display of the species details
   void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override;
 
+  void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override;
+
   /// \returns this graphics item bounding box
   QRectF boundingRect(void) const override;
+
+  /// \returns this graphics item real shape
+  QPainterPath shape(void) const override;
 
   /// Paints this node through the provided painter
   void paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;

@@ -179,6 +179,10 @@ public slots:
   /// Process a double click event
   virtual void doubleClickEvent (const Node &n, QGraphicsSceneMouseEvent *e) = 0;
 
+  /// Process a context menu event
+  virtual void contextMenuEvent (const Node &n,
+                                 QGraphicsSceneContextMenuEvent *e);
+
 protected:
   /// The graphics config
   Config _config;

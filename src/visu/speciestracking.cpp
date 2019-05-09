@@ -1,5 +1,4 @@
 #include <QDialog>
-#include <QColorDialog>
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QPushButton>
@@ -71,8 +70,7 @@ QWidget* ColorDelegate::createEditor(QWidget *parent,
                                      const QStyleOptionViewItem &/*option*/,
                                      const QModelIndex &/*index*/) const {
   auto cd = new QColorDialog(parent);
-  for (int i=0; i<defaultColors.size(); i++)
-    cd->setCustomColor(i, defaultColors.at(i));
+  setupColorDialog(*cd);
   return cd;
 }
 

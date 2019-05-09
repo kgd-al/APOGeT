@@ -3,6 +3,7 @@
 #include <QStack>
 
 #include <QToolBar>
+#include <QWidgetAction>
 #include <QSplitter>
 #include <QLabel>
 #include <QSlider>
@@ -13,10 +14,14 @@
 #include <QToolButton>
 #include <QComboBox>
 
+#include <QMenu>
+
 #include <QStyle>
 #include <QStylePainter>
 #include <QStyleOptionSlider>
 #include <QToolTip>
+
+#include <QContextMenuEvent>
 
 #include <QPixmap>
 #include <QFileDialog>
@@ -130,6 +135,25 @@ public:
   }
 };
 
+class CursorKeepingGraphicsView : public QGraphicsView {
+  QCursor _cursor;
+public:
+  CursorKeepingGraphicsView (QGraphicsScene *scene, QWidget *parent,
+                             QCursor cursor = Qt::CrossCursor)
+    : QGraphicsView(scene, parent), _cursor(cursor) {}
+
+protected:
+  void enterEvent(QEvent *event) {
+    QGraphicsView::enterEvent(event);
+    viewport()->setCursor(_cursor);
+  }
+
+  void mouseReleaseEvent(QMouseEvent *event) {
+    QGraphicsView::mouseReleaseEvent(event);
+    viewport()->setCursor(_cursor);
+  }
+};
+
 /// Helper template generating a parametered slider in one neat one-liner
 template <typename O, typename F>
 auto makeSlider (Qt::Orientation orientation, const QString label,
@@ -154,7 +178,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   };
 
   // Create view
-  _view = new QGraphicsView(_items.scene, this);
+  _view = new CursorKeepingGraphicsView(_items.scene, this);
   _items.scene->setBackgroundBrush(Qt::transparent);
   _view->setRenderHint(QPainter::Antialiasing, true);
   _view->setDragMode(QGraphicsView::ScrollHandDrag);
@@ -296,21 +320,6 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
       colorLayout->addWidget(colorComboBox);
       colorLayout->addWidget(colorEdit);
 
-
-  _config.color = ViewerConfig::CUSTOM;
-  qDebug() << "Overriden default value for color mode: " << _config.color;
-
-  _config.colorSpecs = {
-    { SID(487), QColor(Qt::green), true },
-    { SID(489), QColor(Qt::blue), true },
-//    { SID(3890), species_tracking::ColorDelegate::nextColor(0), true },
-//    { SID(4100), species_tracking::ColorDelegate::nextColor(1), true },
-//    { SID(489), species_tracking::ColorDelegate::nextColor(2), false },
-//    { SID(4043), species_tracking::ColorDelegate::nextColor(3), true },
-//    { SID(3753), species_tracking::ColorDelegate::nextColor(4), false },
-//    { SID(4205), species_tracking::ColorDelegate::nextColor(5), false },
-  };
-
   connect(colorComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
           [this, colorComboBox, colorEdit] (int index) {
     colorEdit->setEnabled(index == ViewerConfig::CUSTOM);
@@ -426,15 +435,6 @@ void PhylogenyViewer_base::makeFit(bool autofit) {
 void PhylogenyViewer_base::changeColorMode(int m) {
   if (m >= 0) {
     _config.color = ViewerConfig::Colors(m);
-    qDebug() << "New color mode: " << m;
-
-    if (m == ViewerConfig::CUSTOM) {
-      qDebug() << "Color specs: {";
-      for (const auto &cs: _config.colorSpecs)
-        qDebug() << "\t" << uint(cs.sid) << ": " << cs.color << " (" << cs.enabled << ")";
-      qDebug() << "}";
-    }
-
     updateNodes([this] (Node *n) {
       n->updateColor();
     });
@@ -508,6 +508,106 @@ void PhylogenyViewer_base::majorContributorChanged(SID sid, SID oldMC, SID newMC
 // ============================================================================
 // == User requests
 // ============================================================================
+
+void PhylogenyViewer_base::contextMenuEvent(const Node &n,
+                                            QGraphicsSceneContextMenuEvent *e) {
+
+  auto &specs = _config.colorSpecs;
+  auto id = n.id;
+  bool modified;
+
+  QMenu menu (this);
+  menu.addSection(QString("Species ") + n.sid);
+  QWidgetAction color (this);
+  QLabel colorLabel;
+  QAction start ("Start");
+  QAction change ("Change");
+  QAction toggle ("Tracking");
+  QAction erase ("Erase");
+
+  color.setDefaultWidget(&colorLabel);
+  toggle.setCheckable(true);
+  auto stateManager =
+    [&start, &change, &toggle, &erase, &specs, &color, &colorLabel, id] {
+    auto it = specs.find(id);
+    bool found = (it != specs.end());
+    color.setVisible(found);
+    start.setEnabled(!found);
+    change.setEnabled(found);
+    toggle.setEnabled(found);
+    erase.setEnabled(found);
+
+    if (found) {
+      QString colorStr = "background: rgb(%1, %2, %3);";
+      colorStr = colorStr.arg(it->color.red())
+                         .arg(it->color.green())
+                         .arg(it->color.blue());
+      colorLabel.setStyleSheet(colorStr);
+      toggle.setChecked(it->enabled);
+    }
+  };
+
+  auto startAction = [this, id, &specs, &modified] {
+    QColorDialog dialog (this);
+    species_tracking::ColorDelegate::setupColorDialog(dialog);
+    dialog.setCurrentColor(species_tracking::ColorDelegate::nextColor(specs.size()));
+    if (dialog.exec() == QDialog::Accepted) {
+      specs.insert({id, dialog.currentColor(), true});
+      modified = true;
+    }
+  };
+
+  auto changeAction = [this, id, &specs, &modified] {
+    auto it = specs.find(id);
+    if (it != specs.end()) {
+      auto spec = *it;
+      QColorDialog dialog (this);
+      species_tracking::ColorDelegate::setupColorDialog(dialog);
+      dialog.setCurrentColor(spec.color);
+      if (dialog.exec() == QDialog::Accepted) {
+        specs.erase(it);
+        spec.color = dialog.currentColor();
+        specs.insert(spec);
+        modified = true;
+      }
+    }
+  };
+
+  auto toggleAction = [id, &specs, &modified] {
+    auto it = specs.find(id);
+    if (it != specs.end()) {
+      auto spec = *it;
+      specs.erase(it);
+      spec.enabled = !spec.enabled;
+      specs.insert(spec);
+      modified = true;
+    }
+  };
+
+  auto eraseAction = [id, &specs, &modified] {
+    auto it = specs.find(id);
+    if (it != specs.end()) {
+      specs.erase(it);
+      modified = true;
+    }
+  };
+
+  menu.addAction(&color);
+  menu.addAction(&start);
+  menu.addAction(&change);
+  menu.addAction(&toggle);
+  menu.addAction(&erase);
+
+  connect(&start, &QAction::triggered, startAction);
+  connect(&change, &QAction::triggered, changeAction);
+  connect(&toggle, &QAction::triggered, toggleAction);
+  connect(&erase, &QAction::triggered, eraseAction);
+
+  stateManager();
+
+  menu.exec(e->screenPos());
+  if (modified) changeColorMode();
+}
 
 void PhylogenyViewer_base::speciesDetailPopup (SID id, QStringList data,
                                                const QString &summary,
