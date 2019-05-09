@@ -8,6 +8,7 @@
 #include "kgd/settings/configfile.h"
 
 #include "phylogenyviewer.h"
+#include "speciestracking.h"
 
 
 /// TODO REMOVE
@@ -96,26 +97,30 @@ int run(int argc, char *argv[]) {
     for (const std::string sspec: utils::split(customColors, ' ')) {
       std::stringstream ss (sspec);
       char c;
-      uint sid;
+      uint sid, cid;
       std::string scolor;
 
       ss >> sid >> c >> scolor;
+      QColor color;
+      if (std::istringstream (scolor) >> cid)
+        color = gui::species_tracking::ColorDelegate::nextColor(cid);
+      else
+        color = QColor(QString::fromStdString(scolor));
+
       if (ss)
-        config.colorSpecs.insert({
-          phylogeny::SID(sid), QColor(QString::fromStdString(scolor)), true
-        });
+        config.colorSpecs.insert({phylogeny::SID(sid), color, true});
       else
         std::cerr << "Failed to parse color spec '" << sspec << "'. Ignoring..."
                   << std::endl;
     }
-//    std::cout << "Parsed custom colors:\n";
-//    for (const auto &spec: config.colorSpecs)
-//      std::cout << "{" << spec.sid << " {"
-//                  << spec.color.red() << ","
-//                  << spec.color.green() << ","
-//                  << spec.color.blue()
-//                << "}, " << spec.enabled << "}\n";
-//    std::cout << std::endl;
+    std::cout << "Parsed custom colors:\n";
+    for (const auto &spec: config.colorSpecs)
+      std::cout << "{" << spec.sid << " {"
+                  << spec.color.red() << ","
+                  << spec.color.green() << ","
+                  << spec.color.blue()
+                << "}, " << spec.enabled << "}\n";
+    std::cout << std::endl;
   }
 
   QApplication a(argc, argv);

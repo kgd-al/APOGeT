@@ -274,13 +274,22 @@ void Node::contextMenuEvent(QGraphicsSceneContextMenuEvent *e) {
 void Node::updateColor(void) {
   const auto &config = treeBase->config();
   coloredPen.setColor(PATH_DEFAULT_COLOR);
-  if (config.color == ViewerConfig::SURVIVORS && _onSurvivorPath)
+  timeline->colors[0] = PATH_DEFAULT_COLOR;
+  timeline->colors[1] = PATH_DEFAULT_COLOR;
+
+  if (config.color == ViewerConfig::SURVIVORS && _onSurvivorPath) {
     coloredPen.setColor(PATH_SURVIVOR_COLOR);
-  else if (config.color == ViewerConfig::CUSTOM) {
+    timeline->colors[0] = PATH_SURVIVOR_COLOR;
+    timeline->colors[1] = PATH_DEFAULT_COLOR;
+
+  } else if (config.color == ViewerConfig::CUSTOM) {
     /// TODO could be improved. See GUIItems::nodes
     auto it = config.colorSpecs.find(id);
-    if (it != config.colorSpecs.end())
+    if (it != config.colorSpecs.end()) {
       coloredPen.setColor(it->color);
+      timeline->colors[0] = it->color;
+      timeline->colors[1] = it->color;
+    }
   }
   update();
   timeline->update();
@@ -350,7 +359,9 @@ void Path::invalidatePath(void) {
   _shape = QPainterPath();
   _shape.setFillRule(Qt::WindingFill);
 
-  _shape.addPath(makeArc(start->scenePos(), end->scenePos()));
+  double sAngle = PolarCoordinates::primaryAngle(start->scenePos());
+  _shape.moveTo(toCartesian(sAngle, radius(end->scenePos())));
+  addArc(_shape, end->scenePos());
   _shape.addEllipse(_shape.pointAtPercent(1), END_POINT_SIZE, END_POINT_SIZE);
 
   update();
@@ -441,13 +452,15 @@ void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidge
 
   if (points[0] != points[1]) {
     QPen pen = node->treeBase->pathPen(details::PATH_BASE);
-    pen.setColor(node->coloredPen.color());
+    pen.setColor(colors[0]);
     painter->setPen(pen);
     painter->drawLine(points[0], points[1]);
   }
 
   if (points[1] != points[2]) {
-    painter->setPen(node->treeBase->pathPen(details::PATH_BASE));
+    QPen pen = node->treeBase->pathPen(details::PATH_BASE);
+    pen.setColor(colors[1]);
+    painter->setPen(pen);
     painter->drawLine(points[1], points[2]);
   }
 
@@ -468,6 +481,7 @@ QRectF Tracker::boundingRect(void) const {
   return tree->boundingRect();
 }
 
+namespace details {
 struct Span {
   double a;
   uint r;
@@ -585,12 +599,14 @@ Tracker::TrackedSpecies* buildRenderingTree (const AncestryNode *n,
   ts->path = buildPath(ts->species);
 
   QVector3D color;
+  QPainterPath childrenPath;
   for (const AncestryNode *c: n->children) {
     auto d = buildRenderingTree(c, config);
     ts->descendants.append(d);
     color += toV3D(d->color);
-    ts->path = ts->path.subtracted(d->path);
+    childrenPath += d->path;
   }
+  ts->hollowedPath = ts->path - childrenPath;
 
   auto it = specs.find(ts->species->id);
   if (it != specs.end())  ts->color = it->color;
@@ -601,8 +617,11 @@ Tracker::TrackedSpecies* buildRenderingTree (const AncestryNode *n,
 
   return ts;
 }
+} // end of namespace details
 
 void Tracker::updateTracking(void) {
+  using namespace gui::details;
+
   const auto &config = tree->config();
   if (config.color == ViewerConfig::CUSTOM) {
     const auto &specs = config.colorSpecs;
@@ -648,13 +667,13 @@ void Tracker::updateTracking(void) {
     while (!specsNodes.empty())
       buildAncestries(specsNodes, anodes, &root, *specsNodes.begin());
 
-//    qDebug() << "Obtained ancestry:";
-//    debugPrintAncestry(root, 0);
+    qDebug() << "Obtained ancestry:";
+    debugPrintAncestry(root, 0);
 
     root = simplify(root);
 
-//    qDebug() << "Simplified ancestry:";
-//    debugPrintAncestry(root, 0);
+    qDebug() << "Simplified ancestry:";
+    debugPrintAncestry(root, 0);
 
     commonAncestor = buildRenderingTree(root, config);
 
@@ -673,7 +692,7 @@ void Tracker::paint (QPainter *painter, const TrackedSpecies *ts) {
     fillColor.setAlphaF(.25);
     painter->setBrush(fillColor);
 
-    painter->drawPath(ts->path);
+    painter->drawPath(ts->hollowedPath);
   painter->restore();
 
   for (const auto *ts_: ts->descendants)  paint(painter, ts_);
@@ -892,7 +911,7 @@ void Contributors::paint (QPainter *painter,
 
     // Draw path with fading color
     for (const Path &p: paths) {
-      pen.setColor(QColor::fromHsvF(c.hsvHueF(), p.width, .5 + .5 * p.width));
+      pen.setColor(QColor::fromHsvF(c.hsvHueF(), p.width, .75 + .25 * p.width));
       painter->setPen(pen);
       painter->drawPath(p.path);
     }

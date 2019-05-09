@@ -418,7 +418,6 @@ void PhylogenyViewer_base::updateClippingRange (uint t) {
   updateLayout();
 }
 
-
 void PhylogenyViewer_base::toggleShowNames(void) {
   _config.showNames = !_config.showNames;
   updateNodes([this] (Node *n) {
@@ -680,7 +679,6 @@ QPixmap PhylogenyViewer_base::renderToPixmap (QSize requestedSize) const {
                                     / requestedSize.width();
   }
 
-  qDebug() << "Creating pixmap of " << requestedSize;
   QPixmap pixmap (requestedSize);
   pixmap.fill(Qt::transparent);
   QRectF bounds = gui::centeredInto(QRectF({0,0}, requestedSize),

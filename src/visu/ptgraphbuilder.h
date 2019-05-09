@@ -312,6 +312,9 @@ struct Timeline : public QGraphicsItem {
   ///  - 2: end-of-life position
   QPointF points[3];
 
+  /// Colors for the segments points[0]-points[1] and points[1]-points[2]
+  QColor colors [2];
+
   /// Create a timeline associated with \p node
   Timeline(Node *node);
 
@@ -339,6 +342,8 @@ struct Tracker : public QGraphicsItem {
     QList<TrackedSpecies*> descendants; ///< Its (in)direct descendants
 
     QPainterPath path; ///< The region of direct influence
+    QPainterPath hollowedPath;  ///< The region of exclusive influence
+
     QColor color; ///< The color of influence
 
     ~TrackedSpecies(void) {
