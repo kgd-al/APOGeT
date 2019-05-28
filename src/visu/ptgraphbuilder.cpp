@@ -925,17 +925,11 @@ void Contributors::paint (QPainter *painter,
     painter->setBackground(Qt::white);
     painter->setBackgroundMode(Qt::OpaqueMode);
     for (const auto &l: labels) {
-      if (!l.second.contains('\n'))
-        painter->drawText(l.first, l.second);
-      else {
-        static const auto align = Qt::AlignVCenter | Qt::AlignLeft;
-        // First find optimal drawing size
-        painter->setPen(Qt::transparent);
-        QRectF lbounds (l.first, QSize(10,10));
-        painter->drawText(lbounds, align, l.second, &lbounds);
-        // Actually draw (centered) text
-        painter->setPen(pen);
-        painter->drawText(lbounds, align, l.second);
+      QFontMetrics fm = painter->fontMetrics();
+      QPointF p = l.first;
+      for (const QString &sl: l.second.split('\n')) {
+        painter->drawText(p, sl);
+        p.setY(p.y() + fm.height());
       }
     }
 
