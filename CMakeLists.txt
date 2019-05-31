@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.4)
 ################################################################################
 
 
-project("apt")
+project("APOGeT")
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic")#"-ftime-report")
 
 set(CMAKE_CXX_STANDARD 17)

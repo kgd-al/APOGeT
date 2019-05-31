@@ -32,17 +32,17 @@ std::istream& genotype::operator>> (std::istream &is, Sex &s) {
 }
 
 DEFINE_GENOME_MUTATION_RATES({
-  __EDNA_PAIR(  optimalDistance, 1.f),
-  __EDNA_PAIR( inbreedTolerance, 1.f),
-  __EDNA_PAIR(outbreedTolerance, 1.f),
-  __EDNA_PAIR(              sex, 1.f),
+  EDNA_PAIR(  optimalDistance, 1.f),
+  EDNA_PAIR( inbreedTolerance, 1.f),
+  EDNA_PAIR(outbreedTolerance, 1.f),
+  EDNA_PAIR(              sex, 1.f),
 })
 
 DEFINE_GENOME_DISTANCE_WEIGHTS({
-  __EDNA_PAIR(  optimalDistance, 1.f),
-  __EDNA_PAIR( inbreedTolerance, 1.f),
-  __EDNA_PAIR(outbreedTolerance, 1.f),
-  __EDNA_PAIR(              sex, 1.f),
+  EDNA_PAIR(  optimalDistance, 1.f),
+  EDNA_PAIR( inbreedTolerance, 1.f),
+  EDNA_PAIR(outbreedTolerance, 1.f),
+  EDNA_PAIR(              sex, 1.f),
 })
 
 #undef GENOME
