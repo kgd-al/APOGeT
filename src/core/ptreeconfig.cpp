@@ -7,7 +7,7 @@ namespace config {
 DEFINE_PARAMETER(double, compatibilityThreshold, .1)
 DEFINE_PARAMETER(double, similarityThreshold, .5)
 DEFINE_PARAMETER(double, avgCompatibilityThreshold, .25)
-DEFINE_PARAMETER(uint, enveloppeSize, 5)
+DEFINE_PARAMETER(uint, rsetSize, 5)
 DEFINE_PARAMETER(bool, simpleNewSpecies, true)
 
 DEFINE_PARAMETER(bool, showNodeNames, true)

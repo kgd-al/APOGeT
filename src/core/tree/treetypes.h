@@ -12,16 +12,55 @@
 #include <set>
 
 #include "kgd/external/json.hpp"
-
-#include "../crossover.h"
+#include "kgd/utils/utils.h"
 
 namespace phylogeny {
 
 /// Helper alias to the json type used for (de)serialization
 using json = nlohmann::json;
 
-/// Helper alias for the genome identificator
-using GID = genotype::BOCData::GID;
+/// Defined type for GenomeID
+enum class GID : uint {
+  INVALID = uint(-1)  ///< Value indicating an unspecified genome
+};
+
+/// Auto-convert outstream operator
+std::ostream& operator<< (std::ostream &os, GID gid);
+
+/// Manager for generating the succession of genetic identificators
+class GIDManager {
+  /// Helper alias to the underlying type of the genetic identificators
+  using GID_ut = std::underlying_type<GID>::type;
+
+  /// Next genome identificator
+  GID_ut next;
+
+public:
+  /// Sets the first identificator to 0
+  GIDManager (void) {
+    setNext(GID(0));
+  }
+
+  /// Sets next genome id
+  void setNext (GID next) {
+    this->next = GID_ut(next) + 1;
+  }
+
+  /// Generate next id value
+  GID operator() (void) {
+    if (next == std::numeric_limits<GID_ut>::max())
+      utils::doThrow<std::out_of_range>(
+        "Exhausted all possible identifers for the underlying type ",
+        utils::className<GID_ut>());
+    return GID(next++);
+  }
+
+  /// \returns value for next id
+  /// \warning This does not modify the current value. Use operator() instead
+  explicit operator GID(void) const {
+    return GID(next);
+  }
+};
 
 /// Alias for the species identificator
 enum class SID : uint {
@@ -34,6 +73,110 @@ std::ostream& operator<< (std::ostream &os, SID sid);
 /// Collections of still-alive species identificators
 using LivingSet = std::set<SID>;
 
+/// Holds the identificators for a given individual
+struct PID {
+  GID gid; ///< Identificator in the genomic population
+  SID sid;  ///< Identificator of the associated species
+
+  /// Creates an invalid identificator
+  explicit PID (void) : PID(GID::INVALID) {}
+
+  /// Creates an identificator from a genomic id
+  explicit PID (GID gid) : gid(gid), sid(SID::INVALID) {}
+
+  /// \returns Whether this ID belong to an existing genome
+  bool valid (void) const { return gid != GID::INVALID; }
+
+  friend bool operator== (const PID &lhs, const PID &rhs) {
+    return lhs.gid == rhs.gid && lhs.sid == rhs.sid;
+  }
+
+  friend void to_json (json &j, const PID &pid) {
+    j["g"] = pid.gid;
+    j["s"] = pid.sid;
+  }
+
+  friend void from_json (const json &j, PID &pid) {
+    pid.gid = j["g"];
+    pid.sid = j["s"];
+  }
+
+  friend std::ostream& operator<< (std::ostream &os, const PID &pid) {
+    return os << "{G: " << pid.gid << ", S: " << pid.sid << "}";
+  }
+};
+
+/// Holds the identificators of a given genome and its parents (if any)
+struct Genealogy {
+  PID mother;  ///< Identificators of the genome's primary parent
+  PID father;  ///< Identificators of the genome's secondary parent
+  PID self;  ///< Identificators of the given genome
+
+  uint generation;  ///< Generation of the given geno;e
+
+  /// Sets the species ID
+  void setSID (SID sid) { self.sid = sid; }
+
+  /// Updates internal data to reflect the clone status of the associated genome
+  void updateAfterCloning (GIDManager &m) {
+    mother = self;
+    father = PID();
+    self = PID(m());
+    generation++;
+  }
+
+  /// Updates internal data to reflect the child status of the associated genome
+  void updateAfterCrossing(const Genealogy &mother, const Genealogy &father,
+                           GIDManager &m) {
+    this->mother = mother.self;
+    this->father = father.self;
+    self = PID(m());
+    generation = std::max(mother.generation, father.generation) + 1;
+  }
+
+  /// Sets up value to indicate a primordial genome
+  void setAsPrimordial(GIDManager &m) {
+    self = PID(m());
+    mother = PID();
+    father = PID();
+    generation = 0;
+  }
+
+  friend void to_json (json &j, const Genealogy &g) {
+    j["m"] = g.mother;
+    j["f"] = g.father;
+    j["s"] = g.self;
+  }
+
+  friend void from_json (const json &j, Genealogy &g) {
+    g.mother = j["m"];
+    g.father = j["f"];
+    g.self = j["s"];
+  }
+
+  friend bool operator== (const Genealogy &lhs, const Genealogy &rhs) {
+    return lhs.self == rhs.self
+        && lhs.mother == rhs.mother
+        && lhs.father == rhs.father
+        && lhs.generation == rhs.generation;
+  }
+
+  friend std::ostream& operator<< (std::ostream &os, const Genealogy &g) {
+    os << "{ ";
+    if (g.mother.valid()) os << "M: " << g.mother << ", ";
+    if (g.father.valid()) os << "F: " << g.father << ", ";
+    if (g.self.valid())   os << "S: " << g.self;
+    else                  os << "PRIMORDIAL";
+    return os << " }";
+  }
+};
+
+/// Contains the result from an insertion into the tree
+template <typename UserData>
+struct InsertionResult {
+  SID sid;  /// Associated species
+  UserData *udata;  /// User data (if part of the rset)
+};
 
 namespace _details {
 
@@ -104,9 +247,6 @@ struct EnveloppeContribution {
   uint than;    ///< Index of the enveloppe point to replace
   float value;  ///< Confidence of the replacement pertinence
 };
-
-/// Helper alias to a genome identificator
-using GID = genotype::BOCData::GID;
 
 /// Computes whether or not the considered species would be better described by
 /// replacing a point from the current enveloppe (with distance map \p edist)

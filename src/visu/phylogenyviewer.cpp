@@ -467,9 +467,9 @@ void PhylogenyViewer_base::treeStepped (uint step, const LivingSet &living) {
 }
 
 void PhylogenyViewer_base::genomeEntersEnveloppe (SID sid, GID) {
-  const uint K = config::PTree::enveloppeSize();
+  const uint K = config::PTree::rsetSize();
   Node *n = _items.nodes.value(sid);
-  n->enveloppe = std::min(n->enveloppe + 1, K);
+  n->rset = std::min(n->rset + 1, K);
   n->autoscale();
 }
 

@@ -11,6 +11,8 @@
 
 #include "kgd/genotype/selfawaregenome.hpp"
 
+#include "tree/treetypes.h"
+
 /*!
  * \file crossover.h
  *
@@ -46,11 +48,6 @@ class BOCData : public EDNA<BOCData> {
   /// Standard deviation for distances above optimal
   float outbreedTolerance;
 
-  /// \cond internal
-  /// Needs privileged access
-  friend struct config::EDNAConfigFile<BOCData>;
-  /// \endcond
-
 public:
   /// Helper alias to the source of randomness
   using Dice = EDNA<BOCData>::Dice;
@@ -62,74 +59,7 @@ public:
   Sex sex;
 
   // ========================================================================
-  // == Classification data
-
-  /// Defined type for GenomeID
-  enum class GID : uint {};
-
-  /// Auto-convert outstream operator
-  friend std::ostream& operator<< (std::ostream &os, GID gid) {
-    return os << std::underlying_type<GID>::type(gid);
-  }
-
-  /// Definition of invalid ID
-  static constexpr GID INVALID_GID = GID(-1);
-
-  /// The id of the associated genome
-  GID id;
-
-private:
-  /// Helper alias to the underlying type of the genetic identificators
-  using GID_ut = std::underlying_type<GID>::type;
-
-  /// Thread-safe counter for sequentially affecting identifcator to genomes
-  static std::atomic<GID_ut> NEXT_ID;
-
-public:
-  /// Sets the first identificator so that the next call
-  ///  to nextID() returns firstID+1
-  /// \note thread-safe
-  static void setFirstID (GID firstID) {
-    NEXT_ID = GID_ut(firstID) + 1;
-  }
-
-  /// Generate next id value
-  /// \note thread-safe
-  static GID nextID (void) {
-    if (NEXT_ID == std::numeric_limits<GID_ut>::max())
-      utils::doThrow<std::out_of_range>(
-        "Exhausted all possible identifers for the underlying type ",
-        utils::className<GID_ut>());
-    return GID(NEXT_ID++);
-  }
-
-  /// \returns value for next id
-  /// \warning This does not modify the current value. Use nextID instead
-  static GID getNextID (void) {
-    return GID(GID_ut(NEXT_ID));
-  }
-
-  /// The set of parents
-  enum Parent : uint { MOTHER = 0, FATHER = 1 };
-
-  /// The id of the associated genome's parents, if any. NO_ID otherwise
-  GID parents [2];
-
-  /// The generation at which the associated genome appeared
-  uint generation;
-
-  // ========================================================================
-  // == Member function(s)
-
-  /// \return Whether or not the genome has registered a parent \p p
-  bool hasParent (Parent p) const {
-    return parents[p] != INVALID_GID;
-  }
-
-  /// \return The id of parent \p p
-  GID parent (Parent p) const {
-    return parents[p];
-  }
+  // == Member functions
 
   /// \return the optimal genetic distance
   /// \see optimalDistance
@@ -173,69 +103,6 @@ public:
     assert(0 <= compat && compat <= 1);
     d_inbreed = gaussoid_inverse(compat, optimalDistance, inbreedTolerance, -1);
     d_outbreed = gaussoid_inverse(compat, optimalDistance, outbreedTolerance, 1);
-  }
-
-
-  // ========================================================================
-  // == Specific genetic operators
-
-  /// Updates internal data to reflect the clone status of the associated genome
-  void updateCloneLineage (void) {
-    parents[MOTHER] = id;
-    parents[FATHER] = INVALID_GID;
-    id = nextID();
-    generation++;
-  }
-
-  /// Low-level crossing of manually managed fields (id, parents, generation)
-  void crossExtension(const BOCData &lhs, const BOCData &rhs, Dice&) override {
-    id = nextID();
-    parents[MOTHER] = lhs.id;
-    parents[FATHER] = rhs.id;
-    generation = std::max(lhs.generation, rhs.generation) + 1;
-  }
-
-  /// Sets up manually managed field (id, parents, generation)
-  void randomExtension(Dice&) override {
-    id = nextID();
-    parents[MOTHER] = INVALID_GID;
-    parents[FATHER] = INVALID_GID;
-    generation = 0;
-  }
-
-  // ========================================================================
-  // == Serialization
-
-  /// Overridden to include manual fields in the comparison
-  void equalExtension (const BOCData &that, bool &eq) const override {
-    eq &= id == that.id
-       && parents[MOTHER] == that.parents[MOTHER]
-       && parents[FATHER] == that.parents[FATHER]
-       && generation == that.generation;
-  }
-
-  /// Overridden to include manual fields in the serialization
-  void to_jsonExtension (nlohmann::json &j) const override {
-    j["id"] = id;
-    j["p0"] = parents[MOTHER];
-    j["p1"] = parents[FATHER];
-    j["G"] = generation;
-  }
-
-  /// Overridden to include manual fields in the deserialization
-  void from_jsonExtension (nlohmann::json &j) override {
-    id = j["id"];               j.erase("id");
-    parents[MOTHER] = j["p0"];  j.erase("p0");
-    parents[FATHER] = j["p1"];  j.erase("p1");
-    generation = j["G"];        j.erase("G");
-  }
-
-  /// Overridden to include manual fields in the stream
-  void to_streamExtension (std::ostream &os) const override {
-    os << "id: " << id << "\n"
-       << "p0: " << parents[MOTHER] << "\n"
-       << "p1: " << parents[FATHER] << "\n"
-       << " G: " << generation << "\n";
   }
 };
 

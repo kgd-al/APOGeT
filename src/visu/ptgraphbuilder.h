@@ -147,7 +147,7 @@ public:
   using Data = phylogeny::SpeciesData;
   const Data &data; ///< The data of the associated species
 
-  uint enveloppe; ///< Size of the associated species' enveloppe
+  uint rset; ///< Size of the associated species' R-Set
   uint children;  ///< Number of subspecies
 
   const QString sid; ///< String representation of the node's identificator
@@ -167,7 +167,7 @@ public:
       sid(QString::number(std::underlying_type<SID>::type(id))),
       path(nullptr), timeline(nullptr) {
 
-    enveloppe = n.enveloppe.size();
+    rset = n.rset.size();
     children = n.children().size();
 
     _alive = false;
@@ -251,7 +251,7 @@ public:
   /// \returns the ratio of the associated species' enveloppe points with
   /// respect to the target amount defined in config::PTree::enveloppeSize
   float fullness (void) const {
-    return float(enveloppe) / config::PTree::enveloppeSize();
+    return float(rset) / config::PTree::rsetSize();
   }
 
   /// Triggers a callback when this species node is hovered

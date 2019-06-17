@@ -126,7 +126,7 @@ int run(int argc, char *argv[]) {
   QApplication a(argc, argv);
   setlocale(LC_NUMERIC,"C");
 
-  PTree pt = PTree::readFrom(ptreeFile, false);
+  PTree pt = PTree::readFrom(ptreeFile);
 
   auto layoutDir = dirFromStr.value(QString::fromStdString(layoutStr));
   PViewer pv (nullptr, pt, layoutDir, config);

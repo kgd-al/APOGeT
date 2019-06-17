@@ -1,3 +1,5 @@
+#include <iomanip>
+
 #include "../ptreeconfig.h"
 #include "treetypes.h"
 

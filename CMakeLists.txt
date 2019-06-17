@@ -118,15 +118,19 @@ if (NOT CLUSTER_BUILD)
     target_link_libraries(apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
-    set(MAYBE_GUI "apt-gui;apt-basicviewer")
+    set(MAYBE_GUI "apt-gui")
     set(GUI_LIB "${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui> ${QT_LIBS}")
 
-    add_executable(
-        apt-basicviewer
-        src/tests/basicviewer.cpp
-    )
-    target_link_libraries(apt-basicviewer apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
-    set_property(TARGET apt-basicviewer PROPERTY POSITION_INDEPENDENT_CODE ON)
+    option(BUILD_GENERIC_VIEWER "Whether or not to build the generic viewer" ON)
+    message("Building generic viewer " ${BUILD_GENERIC_VIEWER})
+    if (BUILD_GENERIC_VIEWER)
+        add_executable(
+            apt-basicviewer
+            src/tests/basicviewer.cpp
+        )
+        target_link_libraries(apt-basicviewer apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
+        set_property(TARGET apt-basicviewer PROPERTY POSITION_INDEPENDENT_CODE ON)
+    endif()
 
 endif()
 
@@ -223,10 +227,14 @@ endif()
 ## Package info generation / installation
 ################################################################################
 
-install(TARGETS apt-core ${MAYBE_GUI}
+install(TARGETS apt-core
     ARCHIVE DESTINATION lib/kgd/apt
-    RUNTIME DESTINATION bin/kgd/apt
 )
+
+if (BUILD_GENERIC_VIEWER)
+    install(TARGETS apt-basicviewer
+        RUNTIME DESTINATION bin/kgd/apt)
+endif()
 
 install(
     DIRECTORY "${CMAKE_SOURCE_DIR}/src/"

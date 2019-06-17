@@ -26,7 +26,7 @@ struct CFILE : public ConfigFile<CFILE> {
   DECLARE_PARAMETER(double, avgCompatibilityThreshold)
 
   /// Number of genome stored as enveloppe points
-  DECLARE_PARAMETER(uint, enveloppeSize)
+  DECLARE_PARAMETER(uint, rsetSize)
 
   /// Whether to put extra effort in creating new species or plain singletons
   DECLARE_PARAMETER(bool, simpleNewSpecies)

@@ -23,8 +23,8 @@ namespace gui {
 class PhylogenyViewer_base : public QDialog {
   Q_OBJECT
 protected:
-  /// \copydoc genotype::BOCData::GID
-  using GID = genotype::BOCData::GID;
+  /// Helper alias to the genome identificator used in the phylogenic tree
+  using GID = phylogeny::GID;
 
   /// Helper alias to the species identificator used in the phylogenic tree
   using SID = phylogeny::SID;
@@ -312,7 +312,7 @@ protected:
     std::vector<GENOME> genomes;
 
     data.append(gn.computeTooltip());
-    for (const auto &ep: n.enveloppe) {
+    for (const auto &ep: n.rset) {
       data.append(dumpEnveloppePoint(ep));
       genomes.push_back(ep.genome);
     }
@@ -336,7 +336,7 @@ private:
   }
 
   /// \returns a description of the data contained by this enveloppe point
-  QString dumpEnveloppePoint (const typename PTree::Node::EnvPoint &ep) {
+  QString dumpEnveloppePoint (const typename PTree::Node::Representative &ep) {
     QString s;
     s += "Genome: ";
     s += QString::fromStdString(nlohmann::json(ep.genome).dump(2));

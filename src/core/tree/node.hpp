@@ -22,30 +22,30 @@ struct Node {
   using Collection = std::map<SID, Ptr>;
 
   /// Stores the data relative to an enveloppe point
-  struct EnvPoint {
+  struct Representative {
     GENOME genome;  ///< The genome for this representant
     std::unique_ptr<UDATA> userData; ///< Associated user managed statistics
 
     /// Creates the enveloppe point for genome \p g and default-initialize
     /// the associated user data
-    static EnvPoint make (const GENOME &g) {
-      return { g, std::make_unique<UDATA>(g.crossoverData().id) };
+    static Representative make (const GENOME &g) {
+      return { g, std::make_unique<UDATA>(g.genealogy().self.gid) };
     }
 
     /// Serialize enveloppe point \p p into a json
-    friend void to_json (json &j, const typename Node::EnvPoint &p) {
+    friend void to_json (json &j, const Representative &p) {
       j = { p.genome, *p.userData };
     }
 
     /// Deserialize enveloppe point \p p from a json
-    friend void from_json (const json &j, typename Node::EnvPoint &p) {
+    friend void from_json (const json &j, Representative &p) {
       p.genome = j[0].get<GENOME>();
-      p.userData = std::make_unique<UDATA>(genotype::BOCData::INVALID_GID);
+      p.userData = std::make_unique<UDATA>(phylogeny::GID::INVALID);
       *p.userData = j[1].get<UDATA>();
     }
 
     /// Asserts that two enveloppe points are equal
-    friend void assertEqual (const EnvPoint &lhs, const EnvPoint &rhs) {
+    friend void assertEqual (const Representative &lhs, const Representative &rhs) {
       using utils::assertEqual;
       assertEqual(lhs.genome, rhs.genome);
       assertEqual(lhs.userData, rhs.userData);
@@ -69,7 +69,7 @@ public:
   Contributors contributors;
 
   /// Collection of borderoids (in opposition to centroids)
-  std::vector<EnvPoint> enveloppe;
+  std::vector<Representative> rset;
 
   /// Cache map for the intra-enveloppe distances
   _details::DistanceMap distances;
@@ -104,14 +104,14 @@ public:
     return _children[i];
   }
 
-  /// \returns the genome of enveloppe point \p i
-  auto enveloppePointGenome (uint i) const {
-    return enveloppe[i].genome;
+  /// \returns the genome of representative \p i
+  auto representativeGenome (uint i) const {
+    return rset[i].genome;
   }
 
-  /// \returns the genetic identificator for enveloppe point \p i
-  auto enveloppePointId (uint i) const {
-    return enveloppePointGenome(i).crossoverData().id;
+  /// \returns the genetic identificator for representative \p i
+  auto representativeId (uint i) const {
+    return representativeGenome(i).genealogy().self.gid;
   }
 
   /// \returns whether this species still has some members in the simulation
@@ -162,7 +162,7 @@ public:
     while ((p = p->_parent))  spacing += "  ";
 
     os << spacing << "[" << n.id << "] ( ";
-    for (const EnvPoint &p: n.enveloppe)    os << p.genome.id() << " ";
+    for (const Representative &p: n.rset)    os << p.genome.id() << " ";
     os << ")\n";
 
     for (const Ptr &ss: n._children)  os << *ss.get();
@@ -189,7 +189,7 @@ public:
 
     assertEqual(lhs.data, rhs.data);
     assertEqual(lhs.contributors, rhs.contributors);
-    assertEqual(lhs.enveloppe, rhs.enveloppe);
+    assertEqual(lhs.rset, rhs.rset);
     assertEqual(lhs.distances, rhs.distances);
 
     assertEqual(lhs._children, rhs._children);

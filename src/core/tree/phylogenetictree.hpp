@@ -58,9 +58,6 @@ public:
   /// Helper alias to the genome type template parameter
   using UserData = UDATA;
 
-  /// Helper alias for the Parent enumeration
-  using Parent = genotype::BOCData::Parent;
-
   /// Helper alias to a species node
   using Node = phylogeny::Node<Genome, UserData>;
 
@@ -82,10 +79,13 @@ public:
   /// \copydoc Contributors::Contributions
   using SpeciesContribution = typename Contributors::Contributions;
 
+  /// \copydoc InsertionResult
+  using InsertionResult = phylogeny::InsertionResult<UserData>;
+
   /// Create an empty PTree
   PhylogeneticTree(void) {
     _nextNodeID = SID(0);
-    _enveloppeSize = Config::enveloppeSize();
+    _rsetSize = Config::rsetSize();
     _stillborns = 0;
     _step = 0;
     _root = nullptr;
@@ -113,17 +113,12 @@ public:
     return _nodes.at(i);
   }
 
-  /// \return the id of the species gid belongs to
-  SID getSpeciesID (GID gid) const {
-    return _idToSpecies.at(gid);
-  }
-
   /// \return the user data for enveloppe point \p gid or nullptr if it is a
   /// regular individual
-  UserData* getUserData (GID gid) const {
-    const auto &species = _nodes.at(getSpeciesID(gid));
-    for (const auto &ep: species->enveloppe)
-      if (ep.genome.crossoverData().id == gid)
+  UserData* getUserData (const PID &pid) const {
+    const auto &species = _nodes.at(pid.sid);
+    for (const auto &ep: species->rset)
+      if (ep.genome.genealogy().self.gid == pid.gid)
         return ep.userData.get();
     return nullptr;
   }
@@ -147,11 +142,11 @@ public:
   /// \tparam IT Iterator to the begin/end of the population list
   /// \tparam F Functor for extracting the genome id from an iterator
   template <typename IT, typename F>
-  void step (uint step, IT begin, IT end, F geneticID) {
+  void step (uint step, IT begin, IT end, F sidExtractor) {
     // Determine which species are still alive
     LivingSet aliveSpecies;
     for (IT it = begin; it != end; ++it)
-      aliveSpecies.insert(_idToSpecies.at(geneticID(*it)));
+      aliveSpecies.insert(sidExtractor(*it));
 
     // Update internal data
     for (SID sid: aliveSpecies)
@@ -163,16 +158,13 @@ public:
 
     // Potentially notify outside world
     if (_callbacks) _callbacks->onStepped(step, aliveSpecies);
-
-    if (debug())
-      std::cerr << _idToSpecies.size() << " id>species pairs stored" << std::endl;
   }
 
   /// Insert \p g into this PTree
   /// \return The species \p g was added to and, if it was also added to the
   /// enveloppe, a pointer to the associated user data structure
   /// (nullptr otherwise).
-  std::pair<SID, UserData*> addGenome (const Genome &g) {
+  InsertionResult addGenome (const Genome &g) {
     // Ensure that the root exists
     if (!_root) {
       _root = makeNode(SpeciesContribution{});
@@ -180,8 +172,9 @@ public:
     }
 
     // Retrieve parent's species
-    SID mSID = _idToSpecies.parentSID(g, Parent::MOTHER),
-        fSID = _idToSpecies.parentSID(g, Parent::FATHER);
+    const Genealogy &genealogy = g.genealogy();
+    SID mSID = genealogy.mother.sid,
+        fSID = genealogy.father.sid;
 
     Node_ptr s0 = nullptr, s1 = nullptr;
     if (mSID == SID::INVALID && fSID == SID::INVALID)
@@ -202,15 +195,16 @@ public:
   }
 
   /// Remove \p g from this PTree (and update relevant internal data)
-  SID delGenome (const Genome &g) {
-    auto sid = _idToSpecies.remove(g);
+  void delGenome (const Genome &g) {
+    SID sid = g.genealogy().self.sid;
+
     if (debug())
-      std::cerr << "New last appearance of species " << sid << " is " << _step << std::endl;
+      std::cerr << "New last appearance of species " << sid << " is " << _step
+                << std::endl;
 
     SpeciesData &data = nodeAt(sid)->data;
     data.lastAppearance = _step;
     data.currentlyAlive--;
-    return sid;
   }
 
   /// Stream \p pt to \p os. Mostly for debugging purpose: output is quickly
@@ -248,140 +242,16 @@ public:
   }
 
 protected:
-  /// Allows mapping a genome ID to its species ID
-  struct IdToSpeciesMap {
-
-    /// Efficient data storage that retains the number of uses of a genetic ID
-    /// whether by the organism itself or by its direct descendants
-    struct ITSMData {
-      SID species;    ///< The species
-      uint refCount;  ///< The current number of users of this data
-
-      /// Serializes an item into a json
-      friend void to_json (json &j, const ITSMData &d) {
-        j = { d.species, d.refCount };
-      }
-
-      /// Deserializes an item from a json
-      friend void from_json (const json &j, ITSMData &d) {
-        d.species = j[0], d.refCount = j[1];
-      }
-
-      /// Asserts that two id to species map's data are equal
-      friend void assertEqual (const ITSMData &lhs, const ITSMData &rhs) {
-        using utils::assertEqual;
-        assertEqual(lhs.species, rhs.species);
-        assertEqual(lhs.refCount, rhs.refCount);
-      }
-    };
-
-    /// Helper alias to the type of the underlying container
-    using map_t = std::map<GID, ITSMData>;
-
-    /// Internal container
-    map_t map;
-
-    /// \return the size of the lookup table
-    uint size (void) const {
-      return map.size();
-    }
-
-    /// Queries for the parent species identificator for a genome.
-    /// Updates internal reference counter.
-    /// \return The species identificator of \p g 's parent \p p or SID::INVALID
-    /// if \p g does not have such a parent
-    SID parentSID (const Genome &g, Parent p) {
-      if (!g.crossoverData().hasParent(p))  return SID::INVALID;
-
-      auto &d = map.at(g.crossoverData().parent(p));
-      d.refCount++;
-      return d.species;
-    }
-
-    /// Decrement the reference counter for key \p id and removes it upon reaching 0
-    SID remove (const GID id) {
-      auto it = map.find(id);
-      auto sid = it->second.species;
-      auto &ref = it->second.refCount;
-
-      assert(ref > 0);
-      ref--;
-
-      if (config::PTree::DEBUG_ID2SPECIES())
-        std::cerr << "Removed a reference to " << id
-                  << " current count is " << ref << std::endl;
-
-      if (ref == 0)  map.erase(it);
-
-      return sid;
-    }
-
-    /// Try to remove \p g (and its eventual parents) from the association map
-    SID remove (const Genome &g) {
-      auto sid = remove(g.crossoverData().id);
-      for (Parent p: {Parent::MOTHER, Parent::FATHER})
-        if (g.crossoverData().hasParent(p))
-          remove(g.crossoverData().parent(p));
-      return sid;
-    }
-
-    /// Insert data for a genome \p gid belonging to species \p sid
-    void insert (GID gid, SID sid) {
-      ITSMData d;
-      d.refCount = 1;
-      d.species = sid;
-
-      auto res = map.try_emplace(gid, d);
-      if (!res.second)
-        utils::doThrow<std::logic_error>("Unable to register GID(", gid,
-                                         ")>SID(", sid, ") association!");
-
-      if (config::PTree::DEBUG_ID2SPECIES())
-        std::cerr << "Inserted a reference to " << gid
-                  << " current count is 1" << std::endl;
-    }
-
-    /// \return species indentificator for genome \p gid
-    /// \throws std::out_of_range if gid &notin; map
-    SID at (GID gid) const {
-      return map.at(gid).species;
-    }
-
-    /// \return Whether or not \p gid is associated to a species
-    bool contains (GID gid) const {
-      return map.find(gid) != map.end();
-    }
-
-    /// Serialize the underlying map into a json
-    friend void to_json (json &j, const IdToSpeciesMap &m) {
-      j = m.map;
-    }
-
-    /// Deserialize the underlying map from a json
-    friend void from_json (const json &j, IdToSpeciesMap &m) {
-      m.map = j.get<map_t>();
-    }
-
-    /// Assert that two such map are equal
-    friend void assertEqual (const IdToSpeciesMap &lhs,
-                             const IdToSpeciesMap &rhs) {
-      utils::assertEqual(lhs.map, rhs.map);
-    }
-  };
-
   /// The PTree root. Null until the first genome is inserted
   Node_ptr _root;
 
   /// Nodes collection for logarithmic access
   Nodes _nodes;
 
-  /// Genome to species lookup table
-  IdToSpeciesMap _idToSpecies;
-
   /// Pointer to the callbacks object. Null by default
   mutable Callbacks *_callbacks;
 
-  uint _enveloppeSize;  ///< Number of enveloppe points
+  uint _rsetSize;  ///< Number of enveloppe points
   uint _stillborns; ///< Number of stillborn species removed
   uint _step; ///< Current timestep for this tree
 
@@ -426,13 +296,13 @@ protected:
   static float speciesMatchingScoreSimicontinuous (const Genome &g,
                                                    Node_ptr species,
                                                    DCCache &dccache) {
-    uint k = species->enveloppe.size();
+    uint k = species->rset.size();
 
     dccache.clear();
     dccache.reserve(k);
 
     uint matable = 0;
-    for (const auto &ep: species->enveloppe) {
+    for (const auto &ep: species->rset) {
       double d = distance(g, ep.genome);
       double c = std::min(g.crossoverData()(d), ep.genome.crossoverData()(d));
 
@@ -449,13 +319,13 @@ protected:
   static float speciesMatchingScoreContinuous (const Genome &g,
                                                Node_ptr species,
                                                DCCache &dccache) {
-    uint k = species->enveloppe.size();
+    uint k = species->rset.size();
 
     dccache.clear();
     dccache.reserve(k);
 
     float avgCompat = 0;
-    for (const auto &ep: species->enveloppe) {
+    for (const auto &ep: species->rset) {
       double d = distance(g, ep.genome);
       double c = std::min(g.crossoverData()(d), ep.genome.crossoverData()(d));
 
@@ -521,12 +391,12 @@ protected:
   /// Find the appropriate place for \p g in the subtree(s) rooted at
   ///  \p species0 (and species1)
   /// \todo THis function seems ugly and hard to maintain
-  std::pair<SID, UserData*> addGenome (const Genome &g,
-                                    Node_ptr species0, Node_ptr species1,
-                                    SID sid0, SID sid1) {
+  InsertionResult addGenome (const Genome &g,
+                             Node_ptr species0, Node_ptr species1,
+                             SID sid0, SID sid1) {
 
     if (debug()) {
-      std::cerr << "Attempting to add genome " << g.crossoverData().id
+      std::cerr << "Attempting to add genome " << g.genealogy().self.gid
                 << " to species ";
       if (!species1)
         std::cerr << species0->id();
@@ -629,49 +499,50 @@ protected:
                      const DCCache &dccache, Callbacks *callbacks) {
 
     using op = _details::DistanceMap::key_type;
-    const uint k = species->enveloppe.size();
+    const uint k = species->rset.size();
 
     auto &dist = species->distances;
 
     UserData *userData = nullptr;
 
     // Populate the enveloppe
-    if (k < _enveloppeSize) {
+    if (k < _rsetSize) {
       if (debug())  std::cerr << "\tAppend to the enveloppe" << std::endl;
 
-      species->enveloppe.push_back(Node::EnvPoint::make(g));
-      userData = species->enveloppe.back().userData.get();
-      if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(), g.crossoverData().id);
+      species->rset.push_back(Node::Representative::make(g));
+      userData = species->rset.back().userData.get();
+      if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(),
+                                                         g.genealogy().self.gid);
       for (uint i=0; i<k; i++)
         dist[{i, k}] = dccache.distances[i];
 
     // Better enveloppe point ?
     } else {
-      assert(k == _enveloppeSize);
+      assert(k == _rsetSize);
       std::vector<GID> ids (k);
-      for (uint i=0; i<k; i++)  ids[i] = species->enveloppePointId(i);
+      for (uint i=0; i<k; i++)  ids[i] = species->representativeId(i);
       _details::EnveloppeContribution ec =
-          computeContribution(dist, dccache.distances, g.crossoverData().id, ids);
+          computeContribution(dist, dccache.distances, g.genealogy().self.gid, ids);
 
       // Genome inside the enveloppe. Nothing to do
       if (!ec.better) {
         if (debug())
-          std::cerr << "\t" << g.crossoverData().id << "'s contribution is too low ("
+          std::cerr << "\t" << g.genealogy().self.gid << "'s contribution is too low ("
                     << ec.value << ")" << std::endl;
 
       // Replace closest enveloppe point with new one
       } else {
-        typename Node::EnvPoint &ep = species->enveloppe[ec.than];
-        auto ep_id = ep.genome.crossoverData().id;
+        typename Node::Representative &ep = species->rset[ec.than];
+        auto ep_id = ep.genome.genealogy().self.gid;
 
         if (debug())
-          std::cerr << "\t" << g.crossoverData().id << "'s contribution is better "
+          std::cerr << "\t" << g.genealogy().self.gid << "'s contribution is better "
                     << "than enveloppe point " << ec.than << " (id: "
                     << ep_id << ", c = " << ec.value << ")" << std::endl;
 
         if (callbacks) {
           callbacks->onGenomeLeavesEnveloppe(species->id(), ep_id);
-          callbacks->onGenomeEntersEnveloppe(species->id(), g.crossoverData().id);
+          callbacks->onGenomeEntersEnveloppe(species->id(), g.genealogy().self.gid);
         }
 
         ep.userData->removedFromEnveloppe();
@@ -693,16 +564,15 @@ protected:
   }
 
   /// Update species \p s by inserting genome \p g, updating the contributions
-  /// and registering the GID>SID association
-  std::pair<SID, UserData*>
+  /// and registering the GID>SID association in the genome's dedicated field
+  InsertionResult
   updateSpeciesContents(const Genome &g, Node_ptr s,
                         const DCCache &cache,
                         const SpeciesContribution &ctb) {
 
     UserData *userData = insertInto(_step, g, s, cache, _callbacks);
     if (!ctb.empty()) updateContributions(s, ctb);
-    _idToSpecies.insert(g.crossoverData().id, s->id());
-    return std::make_pair(s->id(), userData);
+    return InsertionResult{s->id(), userData};
   }
 
   /// Update species \p s contributions with the provided values
@@ -787,14 +657,14 @@ protected:
       // Only process dead species
       if (!s.extinct()) continue;
 
-      bool underfilled = (s.enveloppe.size() < T * _enveloppeSize);
+      bool underfilled = (s.rset.size() < T * _rsetSize);
       uint liveTime = s.data.lastAppearance - s.data.firstAppearance;
       uint deadTime = _step - s.data.lastAppearance;
       if (underfilled && std::max(MD, liveTime * D) < deadTime) {
         if (Config::DEBUG_STILLBORNS()) {
           std::cerr << "Removing species " << s.id() << " with enveloppe size of "
-                    << s.enveloppe.size() << " / " << _enveloppeSize << " ("
-                    << 100. * s.enveloppe.size() / _enveloppeSize << "%) and "
+                    << s.rset.size() << " / " << _rsetSize << " ("
+                    << 100. * s.rset.size() / _rsetSize << "%) and "
                     << "survival time of " << " max(" << MD << ", " << D << " * ("
                     << s.data.lastAppearance << " - " << s.data.firstAppearance
                     << ")) = " << std::max(MD, D * liveTime) << " < " << deadTime
@@ -825,7 +695,7 @@ private:
 
     j["id"] = n.id();
     j["data"] = n.data;
-    j["envlp"] = n.enveloppe;
+    j["envlp"] = n.rset;
     j["contribs"] = n.contributors.data();
     j["dists"] = jd;
     j["children"] = jc;
@@ -842,7 +712,7 @@ private:
     _nodes[n->id()] = n;
 
     n->data = j["data"];
-    n->enveloppe = j["envlp"].get<decltype(Node::enveloppe)>();
+    n->rset = j["envlp"].get<decltype(Node::rset)>();
     const json jd = j["dists"];
     const json jc = j["children"];
 
@@ -861,36 +731,29 @@ public:
   /// Serialise PTree \p pt into a json
   /// \arg complete Whether to include all data required to resume a simulation
   /// or only those used in displaying/analysing
-  static void toJson (json &j, const PhylogeneticTree &pt, bool complete) {
+  static void toJson (json &j, const PhylogeneticTree &pt) {
     j["_step"] = pt._step;
-    j["_envSize"] = pt._enveloppeSize;
+    j["_envSize"] = pt._rsetSize;
     j["_stillborns"] = pt._stillborns;
     j["tree"] = toJson(*pt._root);
-    if (complete) {
-      j["nextSID"] = pt._nextNodeID;
-      j["i2s"] = pt._idToSpecies;
-    }
+    j["nextSID"] = pt._nextNodeID;
   }
 
   /// Deserialise PTree \p pt from json \p j
   /// \arg complete Whether to load all data required to resume a simulation
   /// or only those used in displaying/analysing.
-  static void fromJson (const json &j, PhylogeneticTree &pt, bool complete) {
+  static void fromJson (const json &j, PhylogeneticTree &pt) {
     pt._step = j["_step"];
     pt._stillborns = j["_stillborns"];
-    pt._enveloppeSize = j["_envSize"];
-    if (Config::enveloppeSize() != pt._enveloppeSize)
+    pt._rsetSize = j["_envSize"];
+    if (Config::rsetSize() != pt._rsetSize)
       utils::doThrow<std::invalid_argument>(
         "Current configuration file specifies an enveloppe size of ",
-        Config::enveloppeSize(), " whereas the provided PTree was built with ",
-        pt._enveloppeSize);
+        Config::rsetSize(), " whereas the provided PTree was built with ",
+        pt._rsetSize);
 
     pt._root = pt.rebuildHierarchy(j["tree"]);
-
-    if (complete) {
-      pt._nextNodeID = j["nextSID"];
-      pt._idToSpecies = j["i2s"].get<IdToSpeciesMap>();
-    }
+    pt._nextNodeID = j["nextSID"];
 
     // Ensure correct parenting
     for (auto &n: pt._nodes)
@@ -907,16 +770,15 @@ public:
     using utils::assertEqual;
     assertEqual(lhs._root, rhs._root);
     assertEqual(lhs._nodes, rhs._nodes);
-    assertEqual(lhs._idToSpecies, rhs._idToSpecies);
 
     assertEqual(lhs._nextNodeID, rhs._nextNodeID);
-    assertEqual(lhs._enveloppeSize, rhs._enveloppeSize);
+    assertEqual(lhs._rsetSize, rhs._rsetSize);
     assertEqual(lhs._stillborns, rhs._stillborns);
     assertEqual(lhs._step, rhs._step);
   }
 
   /// Stores itself at the given location
-  bool saveTo (const std::string &filename, bool complete = false) const {
+  bool saveTo (const std::string &filename) const {
     std::ofstream ofs (filename);
     if (!ofs) {
       std::cerr << "Unable to open '" << filename << "' for writing"
@@ -925,13 +787,13 @@ public:
     }
 
     json j;
-    toJson(j, *this, complete);
+    toJson(j, *this);
     ofs << j.dump(2);
     return true;
   }
 
   /// \returns a phylogenic tree rebuilt from data at the given location
-  static PhylogeneticTree readFrom (const std::string &filename, bool complete = false) {
+  static PhylogeneticTree readFrom (const std::string &filename) {
     std::ifstream ifs (filename);
     if (!ifs)
       throw std::invalid_argument ("Unable to open '" + filename
@@ -940,7 +802,7 @@ public:
     else {
       PhylogeneticTree pt;
       json j = json::parse(utils::readAll(filename));
-      fromJson(j, pt, complete);
+      fromJson(j, pt);
       return pt;
     }
   }
