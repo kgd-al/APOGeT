@@ -81,16 +81,16 @@ int run(int argc, char *argv[]) {
     return 1;
   }
 
-  config::PTree::setupConfig(configFile, verbosity);
+  config::PViewer::setupConfig(configFile, verbosity);
 
   if (!result.count("show-names"))
-    config.showNames = config::PTree::showNodeNames();
+    config.showNames = config::PViewer::showNodeNames();
   if (!result.count("min-survival"))
-    config.minSurvival = config::PTree::minNodeSurvival();
+    config.minSurvival = config::PViewer::minNodeSurvival();
   if (!result.count("min-enveloppe"))
-    config.minEnveloppe = config::PTree::minNodeEnveloppe();
+    config.minEnveloppe = config::PViewer::minNodeEnveloppe();
   if (!result.count("survivors-only"))
-    config.survivorsOnly = config::PTree::survivorNodesOnly();
+    config.survivorsOnly = config::PViewer::survivorNodesOnly();
 
   if (!customColors.empty()) {
     config.color = gui::ViewerConfig::CUSTOM;

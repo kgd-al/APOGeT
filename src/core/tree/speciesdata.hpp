@@ -41,12 +41,13 @@ struct SpeciesData {
   }
 
   /// Asserts that two species data are equal
-  friend void assertEqual (const SpeciesData &lhs, const SpeciesData &rhs) {
+  friend void assertEqual (const SpeciesData &lhs, const SpeciesData &rhs,
+                           bool deepcopy) {
     using utils::assertEqual;
-    assertEqual(lhs.firstAppearance, rhs.firstAppearance);
-    assertEqual(lhs.lastAppearance, rhs.lastAppearance);
-    assertEqual(lhs.count, rhs.count);
-    assertEqual(lhs.currentlyAlive, rhs.currentlyAlive);
+    assertEqual(lhs.firstAppearance, rhs.firstAppearance, deepcopy);
+    assertEqual(lhs.lastAppearance, rhs.lastAppearance, deepcopy);
+    assertEqual(lhs.count, rhs.count, deepcopy);
+    assertEqual(lhs.currentlyAlive, rhs.currentlyAlive, deepcopy);
   }
 };
 

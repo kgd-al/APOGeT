@@ -26,10 +26,27 @@ struct Node {
     GENOME genome;  ///< The genome for this representant
     std::unique_ptr<UDATA> userData; ///< Associated user managed statistics
 
+    /// Default constructor
+    Representative (void) = default;
+
+    /// Copy constructs a representative. User data is deep copied.
+    Representative (const Representative &that)
+      : genome(that.genome),
+        userData(std::make_unique<UDATA>(*that.userData)) {}
+
+    /// Defaulted move constructor
+    Representative (Representative &&) = default;
+
+    /// Assign another representative to this
+    Representative& operator= (Representative that) {
+      swap(*this, that);
+      return *this;
+    }
+
     /// Creates the enveloppe point for genome \p g and default-initialize
     /// the associated user data
     static Representative make (const GENOME &g) {
-      return { g, std::make_unique<UDATA>(g.genealogy().self.gid) };
+      return Representative(g);
     }
 
     /// Serialize enveloppe point \p p into a json
@@ -45,10 +62,24 @@ struct Node {
     }
 
     /// Asserts that two enveloppe points are equal
-    friend void assertEqual (const Representative &lhs, const Representative &rhs) {
+    friend void assertEqual (const Representative &lhs,
+                             const Representative &rhs, bool deepcopy) {
       using utils::assertEqual;
-      assertEqual(lhs.genome, rhs.genome);
-      assertEqual(lhs.userData, rhs.userData);
+      assertEqual(lhs.genome, rhs.genome, deepcopy);
+      assertEqual(lhs.userData, rhs.userData, deepcopy);
+    }
+
+  private:
+    /// Creates a representative of the provided genome
+    Representative (const GENOME &genome)
+      : genome(genome),
+        userData(std::make_unique<UDATA>(genome.genealogy().self.gid)) {}
+
+    /// Swaps contents of the two representatives
+    void swap (Representative &lhs, Representative &rhs) {
+      using std::swap;
+      swap(lhs.genome, rhs.genome);
+      swap(lhs.userData, rhs.userData);
     }
   };
 
@@ -180,19 +211,19 @@ public:
   }
 
   /// Asserts that two phylogenetic nodes are equal
-  friend void assertEqual (const Node &lhs, const Node &rhs) {
+  friend void assertEqual (const Node &lhs, const Node &rhs, bool deepcopy) {
     using utils::assertEqual;
 
-    assertEqual(bool(lhs._parent), bool(rhs._parent));
+    assertEqual(bool(lhs._parent), bool(rhs._parent), deepcopy);
     if (lhs._parent && rhs._parent)
-      assertEqual(lhs._parent->id(), rhs._parent->id());
+      assertEqual(lhs._parent->id(), rhs._parent->id(), deepcopy);
 
-    assertEqual(lhs.data, rhs.data);
-    assertEqual(lhs.contributors, rhs.contributors);
-    assertEqual(lhs.rset, rhs.rset);
-    assertEqual(lhs.distances, rhs.distances);
+    assertEqual(lhs.data, rhs.data, deepcopy);
+    assertEqual(lhs.contributors, rhs.contributors, deepcopy);
+    assertEqual(lhs.rset, rhs.rset, deepcopy);
+    assertEqual(lhs.distances, rhs.distances, deepcopy);
 
-    assertEqual(lhs._children, rhs._children);
+    assertEqual(lhs._children, rhs._children, deepcopy);
   }
 
 private:

@@ -23,7 +23,7 @@ if (${CMAKE_INSTALL_PREFIX} MATCHES "^$ENV{HOME}")
     set(CMAKE_PREFIX_PATH ${CMAKE_INSTALL_PREFIX})
 endif()
 set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
-message(STATUS "Install path is ${CMAKE_INSTALL_PREFIX}/")
+message("Install path is ${CMAKE_INSTALL_PREFIX}/")
 
 
 ################################################################################
@@ -40,7 +40,7 @@ include_directories(${tools_INCLUDE_DIRS})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   link_directories(/usr/local/opt/llvm/lib/)
-  message(STATUS "> Linking against manual clang installation")
+  message("> Linking against manual clang installation")
 endif()
 
 
@@ -48,24 +48,40 @@ endif()
 ## Static library
 ################################################################################
 
-add_library(apt-core STATIC
-    "src/core/crossover.h"
-    "src/core/crossover.cpp"
-    "src/core/ptreeconfig.h"
-    "src/core/ptreeconfig.cpp"
+FUNCTION(PREPEND output prefix)
+   SET(listVar "")
+   FOREACH(f ${ARGN})
+      LIST(APPEND listVar "${prefix}/${f}")
+   ENDFOREACH(f)
+   SET(${output} "${listVar}" PARENT_SCOPE)
+ENDFUNCTION(PREPEND)
 
-    "src/core/tree/enumvector.hpp"
-    "src/core/tree/treetypes.h"
-    "src/core/tree/treetypes.cpp"
-    "src/core/tree/enveloppecriteria.cpp"
-    "src/core/tree/callbacks.hpp"
-    "src/core/tree/speciesdata.hpp"
-    "src/core/tree/speciescontributors.cpp"
-    "src/core/tree/speciescontributors.h"
-    "src/core/tree/node.hpp"
-    "src/core/tree/phylogenetictree.hpp"
+set(CORE_SRC
+    "crossover.h"
+    "crossover.cpp"
+    "ptreeconfig.h"
+    "ptreeconfig.cpp"
 )
+PREPEND(CORE_SRC "src/core" ${CORE_SRC})
+
+set(TREE_SRC
+    "enumvector.hpp"
+    "treetypes.h"
+    "treetypes.cpp"
+    "enveloppecriteria.cpp"
+    "callbacks.hpp"
+    "speciesdata.hpp"
+    "speciescontributors.cpp"
+    "speciescontributors.h"
+    "node.hpp"
+    "phylogenetictree.hpp"
+)
+PREPEND(TREE_SRC "src/core/tree" ${TREE_SRC})
+
+add_library(apt-core STATIC ${CORE_SRC} ${TREE_SRC})
 target_link_libraries(apt-core ${tools_LIBRARIES})
+
+message("${CORE_SRC}")
 
 ################################################################################
 ## GUI management
@@ -93,28 +109,32 @@ if (NOT CLUSTER_BUILD)
     endif()
 
     find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
-    message(STATUS "Qt found at " ${Qt5_DIR})
+    message("Qt found at " ${Qt5_DIR})
 
 
     ############################################################################
     ## GUI sources files
     ############################################################################
 
-    add_library(apt-gui STATIC
-        "src/visu/phylogenyviewer.h"
-        "src/visu/layer.hpp"
-        "src/visu/ptgraphbuilder.h"
-        "src/visu/ptgraphbuilder.cpp"
-        "src/visu/phylogenyviewer.cpp"
-        "src/visu/speciestracking.h"
-        "src/visu/speciestracking.cpp"
-        "src/visu/graphicsviewzoom.h"
-        "src/visu/graphicsviewzoom.cpp"
-        "src/visu/graphicutils.h"
-        "src/visu/graphicutils.cpp"
+    set(VISU_SRC
+        "phylogenyviewer.h"
+        "layer.hpp"
+        "ptgraphbuilder.h"
+        "ptgraphbuilder.cpp"
+        "phylogenyviewer.cpp"
+        "speciestracking.h"
+        "speciestracking.cpp"
+        "graphicsviewzoom.h"
+        "graphicsviewzoom.cpp"
+        "graphicutils.h"
+        "graphicutils.cpp"
+        "pviewerconfig.h"
+        "pviewerconfig.cpp"
 
-        "src/visu/standaloneviewer.hpp"
+        "standaloneviewer.hpp"
     )
+    PREPEND(VISU_SRC "src/visu" ${VISU_SRC})
+    add_library(apt-gui STATIC ${VISU_SRC})
     target_link_libraries(apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -139,16 +159,16 @@ endif()
 ################################################################################
 
 
-message(STATUS "")
+message("")
 
 option(CLUSTER_BUILD "Whether or not building on a cluster (i-e no gui and local linkage)" ON)
-message(STATUS "Cluster building mode is " ${CLUSTER_BUILD})
+message("Cluster building mode is " ${CLUSTER_BUILD})
 if(CLUSTER_BUILD)
     add_definitions(-DCLUSTER_BUILD)
 endif()
 
 option(WITH_DEBUG_INFO "Sets whether to maximize debug data collection" OFF)
-message(STATUS "With debug info " ${WITH_DEBUG_INFO})
+message("With debug info " ${WITH_DEBUG_INFO})
 if(WITH_DEBUG_INFO)
     add_definitions(-DWITH_DEBUG_INFO)
     string(APPEND CMAKE_CXX_FLAGS " -g") # Enable debug info
@@ -163,16 +183,16 @@ if(WITH_DEBUG_INFO)
 endif()
 
 option(BUILD_TESTS "Sets whether to build the tests executables" OFF)
-message(STATUS "Build tests " ${BUILD_TESTS})
+message("Build tests " ${BUILD_TESTS})
 
 option(NO_PRINTER "Sets whether to disable QPrinter related capabilities" OFF)
-message(STATUS "No printer " ${NO_PRINTER})
+message("No printer " ${NO_PRINTER})
 if (NO_PRINTER)
     add_definitions(-NO_PRINTER)
 endif()
 
 option(NO_DVG "Sets whether to disable SVG related capabilities" OFF)
-message(STATUS "No printer " ${NO_SVG})
+message("No printer " ${NO_SVG})
 if (NO_SVG)
     add_definitions(-NO_SVG)
 endif()
@@ -182,7 +202,7 @@ endif()
 ################################################################################
 
 option(GENERATE_HELP "Whether or not to build the help through doxygen" OFF)
-message(STATUS "Help generation is " ${GENERATE_HELP})
+message("Help generation is " ${GENERATE_HELP})
 
 if (GENERATE_HELP)
     cmake_policy(SET CMP0057 NEW)
@@ -207,14 +227,14 @@ if (GENERATE_HELP)
 
     # Qt help
     set(DOXYGEN_GENERATE_QHP YES)
-    set(DOXYGEN_QCH_FILE "../apt.qch")
+    set(DOXYGEN_QCH_FILE "../${PROJECT_NAME}.qch")
     set(DOXYGEN_QHP_NAMESPACE "kgd.apt")
     set(DOXYGEN_QHP_VIRTUAL_FOLDER "kgd_docs")
     set(DOXYGEN_QHG_LOCATION "qhelpgenerator")
 
     # Debugging
     if (CMAKE_BUILD_TYPE MATCHES Debug)
-        message(STATUS "Enabling full documentation")
+        message("Enabling full documentation")
         set(DOXYGEN_ENABLED_SECTIONS "internal")
         set(DOXYGEN_EXTRACT_PRIVATE YES)
     endif()
@@ -227,9 +247,10 @@ endif()
 ## Package info generation / installation
 ################################################################################
 
-install(TARGETS apt-core
-    ARCHIVE DESTINATION lib/kgd/apt
-)
+install(TARGETS apt-core ARCHIVE DESTINATION lib/kgd/apt)
+if (NOT CLUSTER_BUILD)
+    install(TARGETS apt-gui ARCHIVE DESTINATION lib/kgd/apt)
+endif()
 
 if (BUILD_GENERIC_VIEWER)
     install(TARGETS apt-basicviewer
@@ -257,7 +278,7 @@ if (GENERATE_HELP)
     )
 endif()
 
-set(CONFIG "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake")
+set(CONFIG "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake")
 file(GENERATE
     OUTPUT ${CONFIG}
     CONTENT
@@ -268,12 +289,15 @@ set(${PROJECT_NAME}_INCLUDE_DIRS
     ${CMAKE_INSTALL_PREFIX}/include)
 
 set(${PROJECT_NAME}_LIBRARIES
-    $<JOIN:${tools_LIBRARIES};${GUI_LIB};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>,
+    $<JOIN:${tools_LIBRARIES};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>,
     >)
 
 if(NOT CLUSTER_BUILD)
+    set(${PROJECT_NAME}_GUI_LIBRARIES $<JOIN:${GUI_LIB},
+        >)
+
     find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
-    message(STATUS \"Qt found at \" ${Qt5_DIR})
+    message(\"Qt found at \" ${Qt5_DIR})
     set(QT_LIBS ${QT_LIBS})
 endif()
 
@@ -291,7 +315,7 @@ add_custom_target(dependencies ALL DEPENDS ${DEPENDENCY_FILE})
 add_custom_command(
     OUTPUT ${DEPENDENCY_FILE} always_check
     COMMAND ${DEPENDENCY_GENERATOR}
-        ${DEPENDENCY_FILE} AgnosticPhylogeneticTree ${CMAKE_BUILD_TYPE}
+        ${DEPENDENCY_FILE} APOGeT ${CMAKE_BUILD_TYPE}
 
     COMMENT "Generating dependency data"
 )

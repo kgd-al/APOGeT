@@ -77,11 +77,12 @@ public:
   }
 
   /// Asserts that two contributors are equal
-  friend void assertEqual (const Contributor &lhs, const Contributor &rhs) {
+  friend void assertEqual (const Contributor &lhs, const Contributor &rhs,
+                           bool deepcopy) {
     using utils::assertEqual;
-    assertEqual(lhs._speciesID, rhs._speciesID);
-    assertEqual(lhs._count, rhs._count);
-    assertEqual(lhs._elligible, rhs._elligible);
+    assertEqual(lhs._speciesID, rhs._speciesID, deepcopy);
+    assertEqual(lhs._count, rhs._count, deepcopy);
+    assertEqual(lhs._elligible, rhs._elligible, deepcopy);
   }
 };
 
@@ -196,10 +197,11 @@ public:
   }
 
   /// Asserts that two contribution collections are equal
-  friend void assertEqual (const Contributors &lhs, const Contributors &rhs) {
+  friend void assertEqual (const Contributors &lhs, const Contributors &rhs,
+                           bool deepcopy) {
     using utils::assertEqual;
-    assertEqual(lhs.nodeID, rhs.nodeID);
-    assertEqual(lhs.vec, rhs.vec);
+    assertEqual(lhs.nodeID, rhs.nodeID, deepcopy);
+    assertEqual(lhs.vec, rhs.vec, deepcopy);
   }
 };
 

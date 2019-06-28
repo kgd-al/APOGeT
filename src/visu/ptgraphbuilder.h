@@ -63,20 +63,24 @@ public:
   /// \cond internal
   /// Comparison structure for custom color specifications
   struct ColorSpecCMP {
-    using is_transparent = void;
+    using is_transparent = void;  ///< Allows comparing with member types
 
+    /// Compare two species id
     bool operator() (phylogeny::SID lhs, phylogeny::SID rhs) const {
       return lhs < rhs;
     }
 
+    /// Compare two species id
     bool operator() (phylogeny::SID lhs, const ColorSpec &rhs) const {
       return operator() (lhs, rhs.sid);
     }
 
+    /// Compare two species id
     bool operator() (const ColorSpec &lhs, phylogeny::SID rhs) const {
       return operator() (lhs.sid, rhs);
     }
 
+    /// Compare two species id
     bool operator() (const ColorSpec &lhs, const ColorSpec &rhs) {
       return operator() (lhs.sid, rhs.sid);
     }
@@ -263,6 +267,7 @@ public:
   /// Requests display of the species details
   void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override;
 
+  /// Request contextual menu display
   void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override;
 
   /// \returns this graphics item bounding box
@@ -333,6 +338,7 @@ struct Timeline : public QGraphicsItem {
   void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) override;
 };
 
+/// Displays species tracking data
 struct Tracker : public QGraphicsItem {  
   VTree tree; ///< The tree whose species are tracked
 
@@ -361,6 +367,7 @@ public:
   /// \returns the same bounding rect as the graph's bounds
   QRectF boundingRect(void) const override;
 
+  /// Recomputes tracking data
   void updateTracking (void);
 
   /// Paints the paths for the various tracked species
@@ -368,6 +375,7 @@ public:
               QWidget*) override;
 
 private:
+  /// Recursive painter for a given tracked species
   void paint (QPainter *painter, const TrackedSpecies *ts);
 };
 

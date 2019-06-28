@@ -21,9 +21,6 @@
  * Contains the core classes for the phylogeny algorithms
  */
 
-/// NOTE Todo list
-///  TODO Separate PTtree.config from PViewer.config
-
 namespace phylogeny {
 
 /// Placeholder for end-users not requiering additional phylogenic informations
@@ -43,7 +40,6 @@ struct NoUserData {
 /// \tparam UDATA user data for collecting sample statistics at the individual
 /// level (defaults to nothing)
 ///
-/// FIXME At least once, _idToSpecies.at(foo) throws even though _idToSpecies.contains(foo) == true
 template <typename GENOME, typename UDATA>
 class PhylogeneticTree {
   /// Helper lambda for debug printing
@@ -51,6 +47,8 @@ class PhylogeneticTree {
     return config::PTree::DEBUG_LEVEL() * config::PTree::DEBUG_PTREE();
   };
 
+// =============================================================================
+// == Helper types
 public:
   /// Helper alias to the genome type template parameter
   using Genome = GENOME;
@@ -79,8 +77,11 @@ public:
   /// \copydoc Contributors::Contributions
   using SpeciesContribution = typename Contributors::Contributions;
 
-  /// \copydoc InsertionResult
+  /// \copydoc phylogeny::InsertionResult
   using InsertionResult = phylogeny::InsertionResult<UserData>;
+
+// =============================================================================
+// == Resource management (creation, destruction, copy)
 
   /// Create an empty PTree
   PhylogeneticTree(void) {
@@ -92,8 +93,62 @@ public:
     _callbacks = nullptr;
   }
 
-  /// Sets the callbacks used by this ptree
-  void setCallbacks (Callbacks *c) const { _callbacks = c; }
+  /// Constructs a deep copy of that PTree
+  PhylogeneticTree (const PhylogeneticTree &that) {
+    _nextNodeID = that._nextNodeID;
+
+    _root = deepcopy(that._root);
+    updateElligibilities();
+
+    _callbacks = nullptr;
+
+    _rsetSize = that._rsetSize;
+    _stillborns = that._stillborns;
+    _step = that._step;
+  }
+
+  /// Assigns that PTree to this one
+  PhylogeneticTree& operator= (PhylogeneticTree that) {
+    swap(*this, that);
+    return *this;
+  }
+
+  /// Nothing to do. All is based on smart-pointers.
+  ~PhylogeneticTree (void) {}
+
+private:
+  /// Performs a deepcopy of that_n node and all descendants into this PTree
+  Node_ptr deepcopy (const Node_ptr &that_n) {
+    Node_ptr this_n = Node::make_shared(that_n->contributors);
+
+    this_n->data = that_n->data;
+    this_n->rset = that_n->rset;
+    this_n->distances = that_n->distances;
+
+    _nodes[this_n->id()] = this_n;
+
+    for (const Node_ptr &that_c: that_n->children())
+      this_n->addChild(deepcopy(that_c));
+
+    return this_n;
+  }
+
+  /// Swap contents of the provided phylogenetic trees
+  friend void swap (PhylogeneticTree &lhs, PhylogeneticTree &rhs) {
+    using std::swap;
+    swap(lhs._nextNodeID, rhs._nextNodeID);
+    swap(lhs._root, rhs._root);
+    swap(lhs._nodes, rhs._nodes);
+    swap(lhs._callbacks, rhs._callbacks);
+    swap(lhs._rsetSize, rhs._rsetSize);
+    swap(lhs._stillborns, rhs._stillborns);
+    swap(lhs._step, rhs._step);
+  }
+
+public:
+
+// =============================================================================
+// == Accessors
 
   /// \return the callbacks used by this ptree
   Callbacks* callbacks (void) {   return _callbacks; }
@@ -128,10 +183,43 @@ public:
     return _step;
   }
 
+  /// Access current value without modifying it
+  SID nextNodeID (void) const {
+    return _nextNodeID;
+  }
+
+protected:
+  /// \copydoc nodeAt
+  auto& nodeAt (SID i) {
+    return const_cast<Node_ptr&>(std::as_const(*this).nodeAt(i));
+  }
+
+public:
+
+// =============================================================================
+// == Modifiers
+
+  /// Sets the callbacks used by this ptree
+  void setCallbacks (Callbacks *c) const { _callbacks = c; }
+
   /// Sets the current timestep for this PTree
   void setStep (uint step) {
     _step = step;
   }
+
+protected:
+  /// Wraps incrementation of the species identificator counter
+  SID nextNodeID (void) {
+    using SID_t = std::underlying_type<SID>::type;
+    SID curr = _nextNodeID;
+    _nextNodeID = SID(SID_t(_nextNodeID)+1);
+    return curr;
+  }
+
+public:
+
+// =============================================================================
+// == Core API
 
   /// Update the set of still-alive species based on the list of still-alive
   /// genomes [\p begin,\p end[ extracted through \p geneticID
@@ -207,39 +295,12 @@ public:
     data.currentlyAlive--;
   }
 
-  /// Stream \p pt to \p os. Mostly for debugging purpose: output is quickly
-  /// unintelligible
-  friend std::ostream& operator<< (std::ostream &os, const PhylogeneticTree &pt) {
-    os << pt._hybrids << " Hybrids;\n";
-    return os << *pt._root;
-  }
-
-  /// Dump this PTree into dot file \p filename
-  void logTo (const std::string &filename) const {
-    std::ofstream ofs (filename);
-    ofs << "digraph {\n";
-    _root->logTo(ofs);
-    ofs << "}\n";
-  }
+// =============================================================================
+// == Member variables
 
 private:
   /// Identificator for the next species
   SID _nextNodeID;
-
-protected:
-  /// Wraps incrementation of the species identificator counter
-  SID nextNodeID (void) {
-    using SID_t = std::underlying_type<SID>::type;
-    SID curr = _nextNodeID;
-    _nextNodeID = SID(SID_t(_nextNodeID)+1);
-    return curr;
-  }
-
-public:
-  /// Access current value without modifying it
-  SID nextNodeID (void) const {
-    return _nextNodeID;
-  }
 
 protected:
   /// The PTree root. Null until the first genome is inserted
@@ -254,6 +315,9 @@ protected:
   uint _rsetSize;  ///< Number of enveloppe points
   uint _stillborns; ///< Number of stillborn species removed
   uint _step; ///< Current timestep for this tree
+
+// =============================================================================
+// == Helper functions
 
   /// Create a smart pointer to a node created on-the-fly with contributors
   /// as described in \p initialContrib
@@ -284,11 +348,6 @@ protected:
       _callbacks->onNewSpecies(parent ? parent->id() : SID::INVALID, p->id());
 
     return p;
-  }
-
-  /// \copydoc nodeAt
-  auto& nodeAt (SID i) {
-    return const_cast<Node_ptr&>(std::as_const(*this).nodeAt(i));
   }
 
   /// \todo remove one
@@ -679,6 +738,26 @@ protected:
     }
   }
 
+
+// =============================================================================
+// == Generic printing
+
+  /// Stream \p pt to \p os. Mostly for debugging purpose: output is quickly
+  /// unintelligible
+  friend std::ostream& operator<< (std::ostream &os, const PhylogeneticTree &pt) {
+    os << pt._hybrids << " Hybrids;\n";
+    return os << *pt._root;
+  }
+
+  /// Dump this PTree into dot file \p filename
+  void logTo (const std::string &filename) const {
+    std::ofstream ofs (filename);
+    ofs << "digraph {\n";
+    _root->logTo(ofs);
+    ofs << "}\n";
+  }
+
+
 // =============================================================================
 // == Json conversion
 
@@ -766,19 +845,19 @@ public:
 
   /// Asserts that two phylogenetic trees are equal
   friend void assertEqual (const PhylogeneticTree &lhs,
-                           const PhylogeneticTree &rhs) {
+                           const PhylogeneticTree &rhs, bool deepcopy) {
     using utils::assertEqual;
-    assertEqual(lhs._root, rhs._root);
-    assertEqual(lhs._nodes, rhs._nodes);
+    assertEqual(lhs._root, rhs._root, deepcopy);
+    assertEqual(lhs._nodes, rhs._nodes, deepcopy);
 
-    assertEqual(lhs._nextNodeID, rhs._nextNodeID);
-    assertEqual(lhs._rsetSize, rhs._rsetSize);
-    assertEqual(lhs._stillborns, rhs._stillborns);
-    assertEqual(lhs._step, rhs._step);
+    assertEqual(lhs._nextNodeID, rhs._nextNodeID, deepcopy);
+    assertEqual(lhs._rsetSize, rhs._rsetSize, deepcopy);
+    assertEqual(lhs._stillborns, rhs._stillborns, deepcopy);
+    assertEqual(lhs._step, rhs._step, deepcopy);
   }
 
   /// Stores itself at the given location
-  bool saveTo (const std::string &filename) const {
+  bool saveTo (const stdfs::path &filename) const {
     std::ofstream ofs (filename);
     if (!ofs) {
       std::cerr << "Unable to open '" << filename << "' for writing"
@@ -786,10 +865,15 @@ public:
       return false;
     }
 
+    saveTo(ofs);
+    return true;
+  }
+
+  /// Stores itself in the provided stream
+  void saveTo (std::ostream &os) const {
     json j;
     toJson(j, *this);
-    ofs << j.dump(2);
-    return true;
+    os << j.dump(2);
   }
 
   /// \returns a phylogenic tree rebuilt from data at the given location

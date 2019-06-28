@@ -87,20 +87,24 @@ struct PID {
   /// \returns Whether this ID belong to an existing genome
   bool valid (void) const { return gid != GID::INVALID; }
 
+  /// Compares two IDs for equality
   friend bool operator== (const PID &lhs, const PID &rhs) {
     return lhs.gid == rhs.gid && lhs.sid == rhs.sid;
   }
 
+  /// Serializes an ID into json form
   friend void to_json (json &j, const PID &pid) {
     j["g"] = pid.gid;
     j["s"] = pid.sid;
   }
 
+  /// Deserializes an ID from a json
   friend void from_json (const json &j, PID &pid) {
     pid.gid = j["g"];
     pid.sid = j["s"];
   }
 
+  /// Writes an ID into the provided outstream
   friend std::ostream& operator<< (std::ostream &os, const PID &pid) {
     return os << "{G: " << pid.gid << ", S: " << pid.sid << "}";
   }
@@ -142,18 +146,21 @@ struct Genealogy {
     generation = 0;
   }
 
+  /// Serializes genealogy into json form
   friend void to_json (json &j, const Genealogy &g) {
     j["m"] = g.mother;
     j["f"] = g.father;
     j["s"] = g.self;
   }
 
+  /// Deserializes genealogy from a json
   friend void from_json (const json &j, Genealogy &g) {
     g.mother = j["m"];
     g.father = j["f"];
     g.self = j["s"];
   }
 
+  /// Compare two genealogies for equality
   friend bool operator== (const Genealogy &lhs, const Genealogy &rhs) {
     return lhs.self == rhs.self
         && lhs.mother == rhs.mother
@@ -161,6 +168,7 @@ struct Genealogy {
         && lhs.generation == rhs.generation;
   }
 
+  /// Writes a genealogy into an outstream
   friend std::ostream& operator<< (std::ostream &os, const Genealogy &g) {
     os << "{ ";
     if (g.mother.valid()) os << "M: " << g.mother << ", ";
@@ -174,8 +182,8 @@ struct Genealogy {
 /// Contains the result from an insertion into the tree
 template <typename UserData>
 struct InsertionResult {
-  SID sid;  /// Associated species
-  UserData *udata;  /// User data (if part of the rset)
+  SID sid;  ///< Associated species
+  UserData *udata;  ///< User data (if part of the rset)
 };
 
 namespace _details {
@@ -230,10 +238,11 @@ struct ordered_pair {
   }
 
   /// Asserts that two ordered pairs are equal
-  friend void assertEqual (const ordered_pair &lhs, const ordered_pair &rhs) {
+  friend void assertEqual (const ordered_pair &lhs, const ordered_pair &rhs,
+                           bool deepcopy) {
     using utils::assertEqual;
-    assertEqual(lhs.first, rhs.first);
-    assertEqual(lhs.second, rhs.second);
+    assertEqual(lhs.first, rhs.first, deepcopy);
+    assertEqual(lhs.second, rhs.second, deepcopy);
   }
 };
 

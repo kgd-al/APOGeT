@@ -43,24 +43,6 @@ struct CFILE : public ConfigFile<CFILE> {
   /// How long to wait for before considering trimming a species
   DECLARE_PARAMETER(uint, stillbornTrimmingMinDelay)
 
-  /// FIXME Move this to a config for the viewer
-
-  /// Whether to draw species nodes id
-  DECLARE_PARAMETER(bool, showNodeNames)
-
-  /// Do not draw species having lived less than that amount
-  DECLARE_PARAMETER(uint, minNodeSurvival)
-
-  /// Do not draw species having less than this ratio of fullness
-  DECLARE_PARAMETER(uint, minNodeEnveloppe)
-
-  /// Whether to bother drawing extinct paths
-  DECLARE_PARAMETER(bool, survivorNodesOnly)
-
-  /// How much detail to print for species aggregation
-  DECLARE_PARAMETER(uint, speciesDetailVerbosity)
-
-
   /// (Debug) selector for the species matching score computing type
   DECLARE_DEBUG_PARAMETER(bool, DEBUG_FULL_CONTINUOUS, true)
 

@@ -7,6 +7,7 @@
 
 #include "../core/tree/treetypes.h"
 
+#include "pviewerconfig.h"
 #include "ptgraphbuilder.h"
 #include "layer.hpp"
 
@@ -318,7 +319,7 @@ protected:
     }
 
     std::ostringstream oss;
-    GENOME::aggregate(oss, genomes, config::PTree::speciesDetailVerbosity());
+    GENOME::aggregate(oss, genomes, config::PViewer::speciesDetailVerbosity());
 
     speciesDetailPopup(gn.id, data, QString::fromStdString(oss.str()), e);
   }
