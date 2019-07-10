@@ -269,11 +269,11 @@ public:
       s0 = _root;
 
     else if (fSID == SID::INVALID || mSID == fSID)
-      s0 = _nodes[mSID];
+      s0 = _nodes.at(mSID);
 
     else {
-      s0 = _nodes[mSID];
-      s1 = _nodes[fSID];
+      s0 = _nodes.at(mSID);
+      s1 = _nodes.at(fSID);
     }
 
     auto ret = addGenome(g, s0, s1, mSID, fSID);
@@ -329,6 +329,8 @@ protected:
     Contributors c (id);
 
     Node_ptr p = Node::make_shared(c);
+    assert(p);
+
     p->data.firstAppearance = _step;
     p->data.lastAppearance = _step;
     p->data.count = 0;
@@ -697,18 +699,27 @@ protected:
   }
 #endif
 
+//#pragma GCC push_options
+//#pragma GCC optimize ("O0")
+//#warning performStillbornTrimming() optimisation disabled
   /// Delete species with an underfilled enveloppe to limit clutter
   void performStillbornTrimming (void) {
     static const auto &T = Config::stillbornTrimmingThreshold();
     static const auto &D = Config::stillbornTrimmingDelay();
     static const float MD = Config::stillbornTrimmingMinDelay();
 
-    bool remove = true;
-    for (auto it = _nodes.begin(); it != _nodes.end();
-         remove ? it = _nodes.erase(it) : ++it ) {
+    if (Config::DEBUG_STILLBORNS())
+      std::cerr << "Performing stillborn trimming for step "
+                << _step << std::endl;
 
-      Node &s = *it->second;
-      remove = false;
+    bool remove = false;
+    for (auto it = _nodes.begin(); it != _nodes.end();
+         remove ? it = _nodes.erase(it) : ++it, remove = false ) {
+
+      auto p = it->second;
+      assert(p);
+
+      Node &s = *p;
 
       // Ignore non-leaf nodes
       if (!s.children().empty())  continue;
@@ -737,7 +748,7 @@ protected:
       }
     }
   }
-
+//#pragma GCC pop_options
 
 // =============================================================================
 // == Generic printing
