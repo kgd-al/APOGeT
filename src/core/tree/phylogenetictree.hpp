@@ -276,6 +276,10 @@ public:
       s1 = _nodes.at(fSID);
     }
 
+    // Remove (now obsolete) candidacies
+    if (s0->data.pendingCandidates > 0)  s0->data.pendingCandidates--;
+    if (s1 && s1->data.pendingCandidates > 0)  s1->data.pendingCandidates--;
+
     auto ret = addGenome(g, s0, s1, mSID, fSID);
 
     if (Config::DEBUG_LEVEL())  std::cerr << std::endl;
@@ -293,6 +297,18 @@ public:
     SpeciesData &data = nodeAt(sid)->data;
     data.lastAppearance = _step;
     data.currentlyAlive--;
+  }
+
+  /// Register candidate for future insertion attempt in either (sub)species
+  void registerCandidate (const Genealogy &g) {
+    performCandidacyRegistration(g, +1);
+  }
+
+  /// Unregister candidate that will not, after all, attempt insertion in either
+  /// (sub)species.
+  /// \warning Implies a previous call to registerCandidate() with the same \p g
+  void unregisterCandidate (const Genealogy &g) {
+    performCandidacyRegistration(g, -1);
   }
 
 // =============================================================================
@@ -335,6 +351,7 @@ protected:
     p->data.lastAppearance = _step;
     p->data.count = 0;
     p->data.currentlyAlive = 0;
+    p->data.pendingCandidates = 0;
 
     assert(p->contributors.getNodeID()
            == SID(std::underlying_type<SID>::type(_nextNodeID)-1));
@@ -679,6 +696,15 @@ protected:
       (void)newMC;
       assert(!oldMC || oldMC == newMC);
     }
+  }
+
+  /// Actually updates the candidacy values
+  void performCandidacyRegistration (const Genealogy &g, int dir) {
+    SID mSID = g.mother.sid, fSID = g.father.sid;
+    if (mSID != SID::INVALID)
+      _nodes.at(mSID)->data.pendingCandidates += dir;
+    if (mSID != fSID && fSID != SID::INVALID)
+      _nodes.at(fSID)->data.pendingCandidates += dir;
   }
 
 #ifndef NDEBUG

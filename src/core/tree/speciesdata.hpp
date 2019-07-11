@@ -26,9 +26,13 @@ struct SpeciesData {
   /// Number of individuals of this species currently in the simulation
   uint currentlyAlive;
 
+  /// Number of registered future candidate for insertion in this species
+  uint pendingCandidates;
+
   /// Serialize to json
   friend void to_json (json &j, const SpeciesData &d) {
-    j = {d.firstAppearance, d.lastAppearance, d.count, d.currentlyAlive};
+    j = {d.firstAppearance, d.lastAppearance,
+         d.count, d.currentlyAlive, d.pendingCandidates};
   }
 
   /// Deserialize from json
@@ -38,6 +42,7 @@ struct SpeciesData {
     d.lastAppearance = j[i++];
     d.count = j[i++];
     d.currentlyAlive = j[i++];
+    d.pendingCandidates = j[i++];
   }
 
   /// Asserts that two species data are equal
@@ -48,6 +53,7 @@ struct SpeciesData {
     assertEqual(lhs.lastAppearance, rhs.lastAppearance, deepcopy);
     assertEqual(lhs.count, rhs.count, deepcopy);
     assertEqual(lhs.currentlyAlive, rhs.currentlyAlive, deepcopy);
+    assertEqual(lhs.pendingCandidates, rhs.pendingCandidates, deepcopy);
   }
 };
 

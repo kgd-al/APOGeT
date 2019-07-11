@@ -147,7 +147,7 @@ public:
 
   /// \returns whether this species still has some members in the simulation
   bool extinct (void) const {
-    return data.currentlyAlive == 0;
+    return data.currentlyAlive == 0 && data.pendingCandidates == 0;
   }
 
   /// Adds subspecies \p child to this node
