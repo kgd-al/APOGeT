@@ -23,6 +23,7 @@ struct Node {
 
   /// Stores the data relative to an enveloppe point
   struct Representative {
+    uint timestamp; ///< Insertion date
     GENOME genome;  ///< The genome for this representant
     std::unique_ptr<UDATA> userData; ///< Associated user managed statistics
 

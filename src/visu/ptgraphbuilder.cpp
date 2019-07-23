@@ -34,8 +34,6 @@ static constexpr float NODE_RADIUS = 10;
 static constexpr float NODE_MARGIN = 2;
 static constexpr float NODE_SIZE = 2 * (NODE_RADIUS + NODE_MARGIN);
 
-static constexpr float END_POINT_SIZE = NODE_RADIUS / 4;
-
 // == Z-values ======================================================
 
 static constexpr int NODE_SURVIVOR_LEVEL = 11;
@@ -58,6 +56,7 @@ static constexpr int BOUNDS_LEVEL = -30;
 
 static constexpr float AXIS_WIDTH = 1;
 static constexpr float PATH_WIDTH = 1.5;
+static constexpr float CONN_WIDTH = 2 * PATH_WIDTH;
 
 static constexpr Qt::GlobalColor PATH_DEFAULT_COLOR = Qt::darkGray;
 static constexpr Qt::GlobalColor PATH_SURVIVOR_COLOR = Qt::red;
@@ -85,7 +84,7 @@ PolarF toPolar (const QPointF &p) {
 }
 
 QPointF toCartesian (double a, double r) {
-  return r * QPointF(cos(a), sin(a));
+  return QPointF(r * cos(a), r * sin(a));
 }
 
 QPointF toCartesian (const PolarF &p) {
@@ -148,7 +147,7 @@ QPainterPath& addArc (QPainterPath &p, const QPointF &p1, int sign = 1) {
   double a1 = PolarCoordinates::primaryAngle(p1);
   double r1 = PolarCoordinates::length(p1);
 
-  p.arcTo(QRect(-r1, -r1, 2*r1, 2*r1), -qRadiansToDegrees(a0),
+  p.arcTo(-r1, -r1, 2*r1, 2*r1, -qRadiansToDegrees(a0),
           qRadiansToDegrees(sign*(a0 - a1)));
 
   return p;
@@ -357,12 +356,9 @@ void Path::invalidatePath(void) {
   prepareGeometryChange();
 
   _shape = QPainterPath();
-  _shape.setFillRule(Qt::WindingFill);
-
   double sAngle = PolarCoordinates::primaryAngle(start->scenePos());
   _shape.moveTo(toCartesian(sAngle, radius(end->scenePos())));
   addArc(_shape, end->scenePos());
-  _shape.addEllipse(_shape.pointAtPercent(1), END_POINT_SIZE, END_POINT_SIZE);
 
   update();
 }
@@ -375,20 +371,26 @@ QRectF Path::boundingRect() const {
 }
 
 void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
-  if (debugDrawAABB) {
-    painter->save();
-    QPen pen = painter->pen();
-    pen.setColor(Qt::red);
-    pen.setWidthF(0);
-    painter->setPen(pen);
-    painter->drawRect(boundingRect());
-    painter->restore();
-  }
+  painter->save();
+    if (debugDrawAABB) {
+      painter->save();
+      QPen pen = painter->pen();
+      pen.setColor(Qt::red);
+      pen.setWidthF(0);
+      painter->setPen(pen);
+      painter->drawRect(boundingRect());
+      painter->restore();
+    }
 
-  QPen pen = end->treeBase->pathPen(details::PATH_BASE);
-  pen.setColor(end->coloredPen.color());
-  painter->setPen(pen);
-  painter->drawPath(_shape);
+    QPen pen = end->treeBase->pathPen(details::PATH_BASE);
+    pen.setColor(end->coloredPen.color());
+    painter->setPen(pen);
+    painter->drawPath(_shape);
+
+    auto R = PTGraphBuilder::plopRadius(PATH_WIDTH, start->treeBase->radius());
+    painter->setBrush(pen.color());
+    painter->drawEllipse(_shape.pointAtPercent(0), R, R);
+  painter->restore();
 }
 
 
@@ -434,38 +436,41 @@ QPainterPath Timeline::shape (void) const {
   QPainterPath path;
   path.moveTo(points[0]);
   path.lineTo(points[2]);
-  path.addEllipse(points[2], END_POINT_SIZE, END_POINT_SIZE);
   return QPainterPathStroker (node->treeBase->pathPen(details::PATH_BASE)).createStroke(path);
 //  return QPainterPath();
 }
 
 void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
-  if (debugDrawAABB) {
-    painter->save();
-    QPen pen = painter->pen();
-    pen.setColor(Qt::green);
-    pen.setWidthF(0);
-    painter->setPen(pen);
-    painter->drawRect(boundingRect());
-    painter->restore();
-  }
+  painter->save();
+    if (debugDrawAABB) {
+      painter->save();
+        QPen pen = painter->pen();
+        pen.setColor(Qt::green);
+        pen.setWidthF(0);
+        painter->setPen(pen);
+        painter->drawRect(boundingRect());
+      painter->restore();
+    }
 
-  if (points[0] != points[1]) {
     QPen pen = node->treeBase->pathPen(details::PATH_BASE);
-    pen.setColor(colors[0]);
     painter->setPen(pen);
-    painter->drawLine(points[0], points[1]);
-  }
 
-  if (points[1] != points[2]) {
-    QPen pen = node->treeBase->pathPen(details::PATH_BASE);
-    pen.setColor(colors[1]);
-    painter->setPen(pen);
-    painter->drawLine(points[1], points[2]);
-  }
+    if (points[0] != points[1]) {
+      pen.setColor(colors[0]);
+      painter->setPen(pen);
+      painter->drawLine(points[0], points[1]);
+    }
 
-  painter->setBrush(painter->pen().color());
-  painter->drawEllipse(points[2], END_POINT_SIZE, END_POINT_SIZE);
+    if (points[1] != points[2]) {
+      pen.setColor(colors[1]);
+      painter->setPen(pen);
+      painter->drawLine(points[1], points[2]);
+    }
+
+    auto R = PTGraphBuilder::plopRadius(PATH_WIDTH, node->treeBase->radius());
+    painter->setBrush(pen.color());
+    painter->drawEllipse(points[2], R, R);
+  painter->restore();
 }
 
 
@@ -1116,6 +1121,10 @@ float PTGraphBuilder::nodeWidth(float radius) {
 
 float PTGraphBuilder::pathWidth(float baseWidth, float radius) {
   return baseWidth * radius / 400.;
+}
+
+float PTGraphBuilder::plopRadius(float baseWidth, float radius) {
+  return .5 * CONN_WIDTH * pathWidth(baseWidth, radius);
 }
 
 float PTGraphBuilder::fontSize(float radius) {

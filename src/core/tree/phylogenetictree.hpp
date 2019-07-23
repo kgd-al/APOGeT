@@ -165,13 +165,20 @@ public:
 
   /// \return the node with \p sid
   const auto& nodeAt (SID i) const {
-    return _nodes.at(i);
+    if (i == SID::INVALID)
+      throw std::invalid_argument("SID::INVALID is (by definition) invalid");
+
+    auto it = _nodes.find(i);
+    if (it == _nodes.end())
+      utils::doThrow<std::invalid_argument>("No node found for species ", i);
+
+    return it->second;
   }
 
   /// \return the user data for enveloppe point \p gid or nullptr if it is a
   /// regular individual
   UserData* getUserData (const PID &pid) const {
-    const auto &species = _nodes.at(pid.sid);
+    const auto &species = nodeAt(pid.sid);
     for (const auto &ep: species->rset)
       if (ep.genome.genealogy().self.gid == pid.gid)
         return ep.userData.get();
@@ -269,11 +276,11 @@ public:
       s0 = _root;
 
     else if (fSID == SID::INVALID || mSID == fSID)
-      s0 = _nodes.at(mSID);
+      s0 = nodeAt(mSID);
 
     else {
-      s0 = _nodes.at(mSID);
-      s1 = _nodes.at(fSID);
+      s0 = nodeAt(mSID);
+      s1 = nodeAt(fSID);
     }
 
     // Remove (now obsolete) candidacies
@@ -382,7 +389,7 @@ protected:
     uint matable = 0;
     for (const auto &ep: species->rset) {
       double d = distance(g, ep.genome);
-      double c = std::min(g.crossoverData()(d), ep.genome.crossoverData()(d));
+      double c = std::min(g.compatibility(d), ep.genome.compatibility(d));
 
       if (c >= Config::compatibilityThreshold()) matable++;
       dccache.push_back(d, c);
@@ -405,7 +412,7 @@ protected:
     float avgCompat = 0;
     for (const auto &ep: species->rset) {
       double d = distance(g, ep.genome);
-      double c = std::min(g.crossoverData()(d), ep.genome.crossoverData()(d));
+      double c = std::min(g.compatibility(d), ep.genome.compatibility(d));
 
       avgCompat += c;
       dccache.push_back(d, c);
@@ -589,6 +596,7 @@ protected:
 
       species->rset.push_back(Node::Representative::make(g));
       userData = species->rset.back().userData.get();
+      species->rset.back().timestamp = _step;
       if (callbacks)  callbacks->onGenomeEntersEnveloppe(species->id(),
                                                          g.genealogy().self.gid);
       for (uint i=0; i<k; i++)
@@ -631,6 +639,8 @@ protected:
         for (uint i=0; i<k; i++)
           if (i != ec.than)
             dist[op{i,ec.than}] = dccache.distances[i];
+
+        ep.timestamp = _step;
       }
     }
 
@@ -702,9 +712,9 @@ protected:
   void performCandidacyRegistration (const Genealogy &g, int dir) {
     SID mSID = g.mother.sid, fSID = g.father.sid;
     if (mSID != SID::INVALID)
-      _nodes.at(mSID)->data.pendingCandidates += dir;
+      nodeAt(mSID)->data.pendingCandidates += dir;
     if (mSID != fSID && fSID != SID::INVALID)
-      _nodes.at(fSID)->data.pendingCandidates += dir;
+      nodeAt(fSID)->data.pendingCandidates += dir;
   }
 
 #ifndef NDEBUG

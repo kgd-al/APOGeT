@@ -339,7 +339,9 @@ private:
   /// \returns a description of the data contained by this enveloppe point
   QString dumpEnveloppePoint (const typename PTree::Node::Representative &ep) {
     QString s;
-    s += "Genome: ";
+    s += "Insertion: ";
+    s += QString::number(ep.timestamp);
+    s += "\nGenome: ";
     s += QString::fromStdString(nlohmann::json(ep.genome).dump(2));
     s += "\nUser data: ";
     s += QString::fromStdString(nlohmann::json(*ep.userData).dump(2));

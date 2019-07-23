@@ -569,6 +569,10 @@ struct PTGraphBuilder {
   /// \returns the appropriate width for a path drawn in a tree of radius
   static float pathWidth (float baseWidth, float radius);
 
+  /// \returns the appropriate width for a end-of-path decoration in a tree of
+  /// radius
+  static float plopRadius (float baseWidth, float radius);
+
   /// \returns the appropriate font size for a tree of radius
   static float fontSize (float radius);
 
@@ -639,6 +643,9 @@ struct PTGraphBuilder {
     gn->setVisible(Node::MIN_FULLNESS, gn->fullness() >= cache.config.minEnveloppe);
     gn->setVisible(Node::CLIP_RANGE, gn->appearance() <= cache.config.clippingRange);
     gn->setVisible(Node::PARENT, parent ? parent->subtreeVisible() : true);
+
+    // Update rendering
+    gn->updateColor();
   }
 
   /// Recompute all graphics items positions (nodes, paths, timelines)
