@@ -195,6 +195,11 @@ public:
     return _nextNodeID;
   }
 
+  /// Access current set of alive species ids
+  const LivingSet& aliveSpecies (void) const {
+    return _aliveSpecies;
+  }
+
 protected:
   /// \copydoc nodeAt
   auto& nodeAt (SID i) {
@@ -239,12 +244,12 @@ public:
   template <typename IT, typename F>
   void step (uint step, IT begin, IT end, F sidExtractor) {
     // Determine which species are still alive
-    LivingSet aliveSpecies;
+    _aliveSpecies.clear();
     for (IT it = begin; it != end; ++it)
-      aliveSpecies.insert(sidExtractor(*it));
+      _aliveSpecies.insert(sidExtractor(*it));
 
     // Update internal data
-    for (SID sid: aliveSpecies)
+    for (SID sid: _aliveSpecies)
       nodeAt(sid)->data.lastAppearance = step;
     _step = step;
 
@@ -252,7 +257,7 @@ public:
     if ((T > 0) && (_step % T) == 0)  performStillbornTrimming();
 
     // Potentially notify outside world
-    if (_callbacks) _callbacks->onStepped(step, aliveSpecies);
+    if (_callbacks) _callbacks->onStepped(step, _aliveSpecies);
   }
 
   /// Insert \p g into this PTree
@@ -332,12 +337,15 @@ protected:
   /// Nodes collection for logarithmic access
   Nodes _nodes;
 
-  /// Pointer to the callbacks object. Null by default
-  mutable Callbacks *_callbacks;
+  /// Set of currently alive species
+  LivingSet _aliveSpecies;
 
   uint _rsetSize;  ///< Number of enveloppe points
   uint _stillborns; ///< Number of stillborn species removed
   uint _step; ///< Current timestep for this tree
+
+  /// Pointer to the callbacks object. Null by default
+  mutable Callbacks *_callbacks;
 
 // =============================================================================
 // == Helper functions
@@ -861,6 +869,7 @@ public:
     j["_step"] = pt._step;
     j["_envSize"] = pt._rsetSize;
     j["_stillborns"] = pt._stillborns;
+    j["alive"] = pt._aliveSpecies;
     j["tree"] = toJson(*pt._root);
     j["nextSID"] = pt._nextNodeID;
   }
@@ -879,6 +888,7 @@ public:
         pt._rsetSize);
 
     pt._root = pt.rebuildHierarchy(j["tree"]);
+    pt._aliveSpecies = j["alive"].get<LivingSet>();
     pt._nextNodeID = j["nextSID"];
 
     // Ensure correct parenting
@@ -896,6 +906,7 @@ public:
     using utils::assertEqual;
     assertEqual(lhs._root, rhs._root, deepcopy);
     assertEqual(lhs._nodes, rhs._nodes, deepcopy);
+    assertEqual(lhs._aliveSpecies, rhs._aliveSpecies, deepcopy);
 
     assertEqual(lhs._nextNodeID, rhs._nextNodeID, deepcopy);
     assertEqual(lhs._rsetSize, rhs._rsetSize, deepcopy);
