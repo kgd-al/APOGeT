@@ -124,7 +124,14 @@ public:
   }
 
   /// \returns the main contributor for this species (excluding itself)
-  Node* parent (void) { return _parent;  }
+  Node* parent (void) {
+    return _parent;
+  }
+
+  /// \returns the main contributor for this species (excluding itself)
+  const Node* parent (void) const {
+    return _parent;
+  }
 
   /// \returns the collection of subspecies root at this node
   const auto& children (void) const {
