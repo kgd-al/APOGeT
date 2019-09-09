@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <fstream>
+#include <bitset>
 
 #include <cassert>
 #include <iostream>
@@ -294,6 +295,8 @@ public:
 
     auto ret = addGenome(g, s0, s1, mSID, fSID);
 
+    _stats.insertions++;
+
     if (Config::DEBUG_LEVEL())  std::cerr << std::endl;
     return ret;
   }
@@ -309,6 +312,8 @@ public:
     SpeciesData &data = nodeAt(sid)->data;
     data.lastAppearance = _step;
     data.currentlyAlive--;
+
+    _stats.deletions++;
   }
 
   /// Register candidate for future insertion attempt in either (sub)species
@@ -321,6 +326,42 @@ public:
   /// \warning Implies a previous call to registerCandidate() with the same \p g
   void unregisterCandidate (const Genealogy &g) {
     performCandidacyRegistration(g, -1);
+  }
+
+// =============================================================================
+// == Stats management
+
+  /// Ad-oc structure for printing the stats header
+  struct StatsHeader {
+    /// Prints the stats header
+    friend std::ostream& operator<< (std::ostream &os, const StatsHeader&) {
+      return os << " PTInsertions PTDeletions PTComparisons PTBranching";
+    }
+  };
+
+  /// Structure for storing statistics about the phylogenetic dynamics
+  struct Stats {
+    uint insertions = 0;  ///< Number of genomes inserted
+    uint deletions = 0;   ///< Number of genomes removed
+    uint comparisons = 0; ///< Number of representatives tested
+    uint branching = 0;   ///< Number of subspecies at root points
+
+    /// Inserts provided stats in a default fashion
+    friend std::ostream& operator<< (std::ostream &os, const Stats &s) {
+      return os << " " << s.insertions << " " << s.deletions << " "
+                << s.comparisons << " " << s.branching;
+    }
+
+  } _stats; ///< Field storing the phylogenetic dynamics
+
+  /// Resets the statistics
+  void resetStats (void) {
+    _stats = Stats{};
+  }
+
+  /// \return the phylogenetic dynamics statistics
+  const Stats& stats (void) const {
+    return _stats;
   }
 
 // =============================================================================
@@ -388,7 +429,8 @@ protected:
   /// \return Whether \p g is similar enough to \p species
   static float speciesMatchingScoreSimicontinuous (const Genome &g,
                                                    Node_ptr species,
-                                                   DCCache &dccache) {
+                                                   DCCache &dccache,
+                                                   Stats &stats) {
     uint k = species->rset.size();
 
     dccache.clear();
@@ -398,6 +440,8 @@ protected:
     for (const auto &ep: species->rset) {
       double d = distance(g, ep.genome);
       double c = std::min(g.compatibility(d), ep.genome.compatibility(d));
+
+      stats.comparisons++;
 
       if (c >= Config::compatibilityThreshold()) matable++;
       dccache.push_back(d, c);
@@ -411,7 +455,8 @@ protected:
   /// \return Whether \p g is similar enough to \p species
   static float speciesMatchingScoreContinuous (const Genome &g,
                                                Node_ptr species,
-                                               DCCache &dccache) {
+                                               DCCache &dccache,
+                                               Stats &stats) {
     uint k = species->rset.size();
 
     dccache.clear();
@@ -421,6 +466,8 @@ protected:
     for (const auto &ep: species->rset) {
       double d = distance(g, ep.genome);
       double c = std::min(g.compatibility(d), ep.genome.compatibility(d));
+
+      stats.comparisons++;
 
       avgCompat += c;
       dccache.push_back(d, c);
@@ -434,37 +481,52 @@ protected:
   /// Proxy for delegating score computation to the appropriate function
   /// \see Config::FULL_CONTINUOUS
   static float speciesMatchingScore (const Genome &g, Node_ptr species,
-                                     DCCache &dccache) {
+                                     DCCache &dccache, Stats &stats) {
     auto f =
       Config::DEBUG_FULL_CONTINUOUS() ?
           speciesMatchingScoreContinuous
         : speciesMatchingScoreSimicontinuous;
-    return f(g, species, dccache);
+    return f(g, species, dccache, stats);
   }
 
   /// Finds the best derived species amongst the list of parents
-  void findBestDerived (const Genome &g, std::vector<Node_ptr> species,
+  void findBestDerived (const Genome &g, const std::vector<Node_ptr> &species,
                         Node_ptr &bestSpecies, float &bestScore,
                         DCCache &bestSpeciesDCCache) {
 
     DCCache dccache;
-    std::vector<size_t> sizes;
-    size_t max = 0;
 
-    sizes.reserve(species.size());
-    for (Node_ptr &sp: species) {
-      size_t s = sp->children().size();
-      sizes.push_back(s);
-      if (max < s)  max = s;
+    const auto S = species.size();
+
+    using it_t = decltype(std::declval<Node>().children().rbegin());
+    std::vector<it_t> its, ends;
+    its.reserve(S);
+    ends.reserve(S);
+    for (const Node_ptr &sp: species) {
+      its.push_back(sp->children().crbegin());
+      ends.push_back(sp->children().crend());
     }
 
-    if (debug() >= 2) std::cerr << "\tComputing scores:\n";
-    for (uint i=0; i<max; i++) {
-      for (uint k=0; k<species.size(); k++) {
-        if (sizes[k] <= i)  continue;
+    const uint allDone = [&species] {
+      uint tmp = 0;
+      for (uint i=0; i<species.size(); i++) tmp |= (1<<i);
+      return tmp;
+    }();
 
-        Node_ptr &subspecies = species[k]->child(i);
-        float score = speciesMatchingScore(g, subspecies, dccache);
+    uint done = 0;
+    int k = 0;
+
+    if (debug() >= 2) std::cerr << "\tComputing scores:\n";
+    while (done != allDone) {
+      auto &it = its[k];
+      if (it == ends[k]) {
+        done |= (1<<k);
+
+      } else {
+        _stats.branching++;
+
+        const Node_ptr &subspecies = *it;
+        float score = speciesMatchingScore(g, subspecies, dccache, _stats);
 
         if (debug() >= 2)
           std::cerr << "\t\t" << subspecies->id() << ": " << score << std::endl;
@@ -477,7 +539,11 @@ protected:
 
         if (bestScore > 0)
           return;
+
+        ++it;
       }
+
+      k = (k + 1) % S;
     }
   }
 
@@ -520,7 +586,7 @@ protected:
     // Find best top-level species
     for (uint i=0; i<species.size(); i++) {
       Node_ptr s = species[i];
-      float score = speciesMatchingScore(g, s, dccache);
+      float score = speciesMatchingScore(g, s, dccache, _stats);
       if (bestScore < score) {
         bestSpecies = s;
         bestScore = score;
@@ -847,8 +913,8 @@ private:
 
     n->data = j["data"];
     n->rset = j["envlp"].get<decltype(Node::rset)>();
-    const json jd = j["dists"];
-    const json jc = j["children"];
+    const json &jd = j["dists"];
+    const json &jc = j["children"];
 
     using op = _details::DistanceMap::key_type;
     for (const auto &d: jd)
