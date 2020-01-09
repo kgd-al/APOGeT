@@ -989,15 +989,15 @@ public:
       return false;
     }
 
-    saveTo(ofs);
+    saveTo(ofs, -1);
     return true;
   }
 
   /// Stores itself in the provided stream
-  void saveTo (std::ostream &os) const {
+  void saveTo (std::ostream &os, uint ident = 2) const {
     json j;
     toJson(j, *this);
-    os << j.dump(2);
+    os << j.dump(ident);
   }
 
   /// \returns a phylogenic tree rebuilt from data at the given location

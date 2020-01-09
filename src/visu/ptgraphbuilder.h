@@ -617,10 +617,6 @@ struct PTGraphBuilder {
     cache.items.nodes[gn->id] = gn;
     cache.items.scene->addItem(gn);
 
-    // Process subspecies
-    for (const auto &n_: n.children())
-      addSpecies(gn, *n_, cache);
-
     // Generate path to parent if needed
     if (parent) {
       auto gp = new gui::Path(parent, gn);
@@ -634,6 +630,10 @@ struct PTGraphBuilder {
     gn->timeline = gt;
     cache.items.scene->addItem(gt);
     gt->setVisible(gn->subtreeVisible());
+
+    // Process subspecies
+    for (const auto &n_: n.children())
+      addSpecies(gn, *n_, cache);
 
     // Manage visibility
     gn->updateNode(gn->isStillAlive(cache.time));

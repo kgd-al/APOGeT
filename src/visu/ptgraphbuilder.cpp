@@ -251,6 +251,11 @@ void Node::setOnSurvivorPath (bool osp) {
   setZValue(levels[0][s]);
   if (timeline) timeline->setZValue(levels[1][s]);
   if (path) path->setZValue(levels[2][s]);
+
+//  auto q = qDebug();
+//  q << "N" << sid << ": " << s << zValue();
+//  if (timeline) q << timeline->zValue();
+//  if (path) q << path->zValue();
 }
 
 void Node::hoverEnterEvent(QGraphicsSceneHoverEvent*) {
@@ -296,6 +301,9 @@ void Node::updateColor(void) {
 }
 
 void Node::paint (QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
+//  qDebug() << parentItem() << "Node(" << sid
+//           << ")::paint(" << onSurvivorPath() << "," << zValue() << ")";
+
   if (debugDrawAABB) {
     painter->save();
       QPen pen = painter->pen();
@@ -371,6 +379,9 @@ QRectF Path::boundingRect() const {
 }
 
 void Path::paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*) {
+//  qDebug() << parentItem() << "Path(" << start->sid << ">" << end->sid
+//           << ")::paint(" << end->onSurvivorPath() << "," << zValue() << ")";
+
   painter->save();
     if (debugDrawAABB) {
       painter->save();
@@ -441,6 +452,9 @@ QPainterPath Timeline::shape (void) const {
 }
 
 void Timeline::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
+//  qDebug() << parentItem() << "Timeline(" << node->sid << ")::paint("
+//           << node->onSurvivorPath() << "," << zValue() << ")";
+
   painter->save();
     if (debugDrawAABB) {
       painter->save();
