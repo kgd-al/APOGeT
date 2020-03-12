@@ -35,6 +35,9 @@ public:
   /// Whether to display nodes
   bool showNames = true;
 
+  /// Whether to display hybridism graph on overlay
+  bool showHybrids = false;
+
   /// Whether to keep the scene fully in view
   bool autofit = true;
 

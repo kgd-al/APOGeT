@@ -298,10 +298,12 @@ public:
 
 protected:
   void hoverEvent (SID sid, bool entered) override {
-    if (entered)
-          _items.contributors->show(sid, _items,
-                                    _ptree.nodeAt(sid)->contributors);
-    else  _items.contributors->hide();
+    if (entered && _config.showHybrids)
+      _items.contributors->show(sid, _items,
+                                _ptree.nodeAt(sid)->contributors);
+
+    else if (_items.contributors->isVisible())
+      _items.contributors->hide();
 
     emit onSpeciesHoverEvent(sid, entered);
   }

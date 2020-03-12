@@ -254,6 +254,12 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   connect(showNames, &QCheckBox::toggled,
           this, &PhylogenyViewer_base::toggleShowNames);
 
+  // Hybrids overlay
+  QCheckBox *showHybrids = new QCheckBox("Hybrids");
+  showHybrids->setChecked(_config.showHybrids);
+  connect(showHybrids, &QCheckBox::toggled,
+          [this] { _config.showHybrids = !_config.showHybrids; });
+
   // Autofit checkbox
   QCheckBox *autofit = new QCheckBox("AutoFit");
   autofit->setChecked(_config.autofit);
@@ -287,6 +293,7 @@ void PhylogenyViewer_base::constructorDelegate(uint steps, Direction direction) 
   auto *checkboxesLayout = new QVBoxLayout;
   checkboxesLayout->addWidget(survivorsOnly);
   checkboxesLayout->addWidget(showNames);
+  checkboxesLayout->addWidget(showHybrids);
   checkboxesLayout->addWidget(autofit);
   checkboxesHolder->setLayout(checkboxesLayout);
   toolbar->addWidget(checkboxesHolder);

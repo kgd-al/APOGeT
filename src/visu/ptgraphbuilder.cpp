@@ -208,6 +208,10 @@ void Node::autoscale(void) {
 }
 
 void Node::setVisible (Visibility v, bool visible) {
+  if (v == SHOW_NAME
+      && treeBase->config().color == ViewerConfig::Colors::SURVIVORS)
+    visible &= _onSurvivorPath;
+
   visibilities.setFlag(v, visible);
 
   if (v != SHOW_NAME) {
