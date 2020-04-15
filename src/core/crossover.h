@@ -189,6 +189,15 @@ struct requiresAlignment : std::false_type {};
 
 template <typename T>
 struct requiresAlignment<T, std::void_t<typename T::Alignment>> : std::true_type {};
+
+template <typename GENOME>
+using FCOMPAT = std::function<double(const GENOME&, const GENOME&, double)>;
+
+template <typename GENOME>
+double femaleBiased (const GENOME &female, const GENOME &/*male*/, double dist) {
+  return female.compatibility(dist);
+}
+
 }
 
 /// Crossing of \p mother and \p father.
@@ -207,19 +216,22 @@ struct requiresAlignment<T, std::void_t<typename T::Alignment>> : std::true_type
 /// \param litter Container for children genome. In case of successfull mating
 /// will contains as many offsprings as the input size. Untouched otherwise.
 /// \param dice Source of randomness.
+/// \param fcompat Compatibility function. Defaults to female biased
 /// \param oDistance If not null, will be filled with the genomic distance
 /// \param oCompatibility If not null, will be filled with perceived compatibility
 template <typename GENOME>
 std::enable_if_t<!_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
                 std::vector<GENOME> &litter, rng::AbstractDice &dice,
+                _details::FCOMPAT<GENOME> fcompat =
+                  _details::femaleBiased<GENOME>,
                 float *oDistance = nullptr, float *oCompatibility = nullptr) {
 
   double dist = distance(mother, father);
   assert(0 <= dist);
   if (oDistance) *oDistance = dist;
 
-  double compat = mother.compatibility(dist);
+  double compat = fcompat(mother, father, dist);
   assert(0 <= compat && compat <= 1);
   if (oCompatibility)  *oCompatibility = compat;
 
@@ -255,12 +267,15 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
 /// \param litter Container for children genome. In case of successfull mating
 /// will contains as many offsprings as the input size. Untouched otherwise.
 /// \param dice Source of randomness.
+/// \param fcompat Compatibility function. Defaults to female biased
 /// \param oDistance If not null, will be filled with the genomic distance
 /// \param oCompatibility If not null, will be filled with perceived compatibility
 template <typename GENOME>
 std::enable_if_t<_details::requiresAlignment<GENOME>::value, bool>
 bailOutCrossver(const GENOME &mother, const GENOME &father,
                 std::vector<GENOME> &litter, rng::AbstractDice &dice,
+                _details::FCOMPAT<GENOME> fcompat =
+                  _details::femaleBiased<GENOME>,
                 float *oDistance = nullptr, float *oCompatibility = nullptr) {
 
   typename GENOME::Alignment alg = align(mother, father);
@@ -269,7 +284,7 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
   assert(0 <= dist);
   if (oDistance) *oDistance = dist;
 
-  double compat = mother.compatibility(dist);
+  double compat = fcompat(mother, father, dist);
   assert(0 <= compat && compat <= 1);
   if (oCompatibility)  *oCompatibility = compat;
 
