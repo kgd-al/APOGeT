@@ -252,7 +252,7 @@ if (NOT CLUSTER_BUILD)
     install(TARGETS apt-gui ARCHIVE DESTINATION lib/kgd/apt)
 endif()
 
-if (BUILD_GENERIC_VIEWER)
+if (BUILD_GENERIC_VIEWER AND NOT CLUSTER_BUILD)
     install(TARGETS apt-basicviewer
         RUNTIME DESTINATION bin/kgd/apt)
 endif()
