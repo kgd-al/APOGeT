@@ -13,6 +13,7 @@
 
 #include "kgd/external/json.hpp"
 #include "kgd/utils/utils.h"
+#include "kgd/utils/assertequal.hpp"
 
 namespace phylogeny {
 
@@ -59,6 +60,13 @@ public:
   /// \warning This does not modify the current value. Use operator() instead
   explicit operator GID(void) const {
     return GID(next);
+  }
+
+  /// Used to assert correct cloning (designed for the EDEnS algorithm)
+  friend void assertEqual (const GIDManager &lhs, const GIDManager &rhs,
+                           bool deepcopy) {
+    using utils::assertEqual;
+    assertEqual(lhs.next, rhs.next, deepcopy);
   }
 };
 
