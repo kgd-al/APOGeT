@@ -84,7 +84,7 @@ public:
     }
 
     /// Compare two species id
-    bool operator() (const ColorSpec &lhs, const ColorSpec &rhs) {
+    bool operator() (const ColorSpec &lhs, const ColorSpec &rhs) const {
       return operator() (lhs.sid, rhs.sid);
     }
   };
