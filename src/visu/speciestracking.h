@@ -1,5 +1,5 @@
-#ifndef SPECIESTRACKING_H
-#define SPECIESTRACKING_H
+#ifndef KGD_SPECIESTRACKING_H
+#define KGD_SPECIESTRACKING_H
 
 #include <QStyledItemDelegate>
 #include <QComboBox>
@@ -134,4 +134,4 @@ signals:
 /// \endcond internal
 } // end of namespace gui::species_tracking
 
-#endif // SPECIESTRACKING_H
+#endif // KGD_SPECIESTRACKING_H

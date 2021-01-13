@@ -32,6 +32,7 @@ message("Install path is ${CMAKE_INSTALL_PREFIX}/")
 
 find_package(tools CONFIG REQUIRED)
 include_directories(${tools_INCLUDE_DIRS})
+list(APPEND KGD_DEFINITIONS ${tools_KGD_DEFINITIONS})
 
 
 ####################################################################################################
@@ -43,6 +44,12 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   message("> Linking against manual clang installation")
 endif()
 
+
+################################################################################
+## Process additional pre-processor definitions
+################################################################################
+add_definitions(${KGD_DEFINITIONS})
+message("Using additionnal pre-processor definitions: ${KGD_DEFINITIONS}")
 
 ################################################################################
 ## Static library
@@ -191,7 +198,7 @@ if (NO_PRINTER)
     add_definitions(-NO_PRINTER)
 endif()
 
-option(NO_DVG "Sets whether to disable SVG related capabilities" OFF)
+option(NO_SVG "Sets whether to disable SVG related capabilities" OFF)
 message("No printer " ${NO_SVG})
 if (NO_SVG)
     add_definitions(-NO_SVG)
@@ -300,6 +307,8 @@ if(NOT CLUSTER_BUILD)
     message(\"Qt found at \" ${Qt5_DIR})
     set(QT_LIBS ${QT_LIBS})
 endif()
+
+set(${PROJECT_NAME}_KGD_DEFINITIONS ${KGD_DEFINITIONS})
 
 set(${PROJECT_NAME}_BUILD_TYPE ${CMAKE_BUILD_TYPE})
 if(NOT \${${PROJECT_NAME}_BUILD_TYPE} STREQUAL \${CMAKE_BUILD_TYPE})

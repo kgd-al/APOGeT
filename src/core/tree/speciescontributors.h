@@ -1,5 +1,5 @@
-﻿#ifndef SPECIESCONTRIBUTORS_H
-#define SPECIESCONTRIBUTORS_H
+﻿#ifndef KGD_SPECIES_CONTRIBUTORS_H
+#define KGD_SPECIES_CONTRIBUTORS_H
 
 /*!
  * \file speciescontributors.h
@@ -207,4 +207,4 @@ public:
 
 } // end of namespace phylogeny
 
-#endif // SPECIESCONTRIBUTORS_H
+#endif // KGD_SPECIES_CONTRIBUTORS_H

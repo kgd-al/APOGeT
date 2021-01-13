@@ -1,5 +1,5 @@
-#ifndef _PHYLOGENIC_TREE_H_
-#define _PHYLOGENIC_TREE_H_
+#ifndef KGD_PHYLOGENIC_TREE_H
+#define KGD_PHYLOGENIC_TREE_H
 
 #include <vector>
 #include <map>
@@ -1018,4 +1018,4 @@ public:
 
 } // end of namespace phylogeny
 
-#endif // _PHYLOGENIC_TREE_H_
+#endif // KGD_PHYLOGENIC_TREE_H

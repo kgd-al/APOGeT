@@ -1,5 +1,5 @@
-#ifndef GRAPHICUTILS_H
-#define GRAPHICUTILS_H
+#ifndef KGD_APOGET_GRAPHIC_UTILS_H
+#define KGD_APOGET_GRAPHIC_UTILS_H
 
 #include <QColor>
 #include <QRectF>
@@ -21,4 +21,4 @@ QRectF centeredInto (const QRectF &outter, const QRectF &inner);
 
 }
 
-#endif // GRAPHICUTILS_H
+#endif // KGD_APOGET_GRAPHIC_UTILS_H

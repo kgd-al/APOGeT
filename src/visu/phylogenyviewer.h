@@ -1,5 +1,5 @@
-#ifndef PHYLOGENYVIEWER_H
-#define PHYLOGENYVIEWER_H
+#ifndef KGD_PHYLOGENYVIEWER_H
+#define KGD_PHYLOGENYVIEWER_H
 
 #include <QDialog>
 #include <QGraphicsView>
@@ -429,4 +429,4 @@ private:
   PV *viewer;
 };
 
-#endif // PHYLOGENYVIEWER_H
+#endif // KGD_PHYLOGENYVIEWER_H

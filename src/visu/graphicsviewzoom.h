@@ -1,5 +1,5 @@
-#ifndef GRAPHICSVIEWZOOM_H
-#define GRAPHICSVIEWZOOM_H
+#ifndef KGD_GRAPHICSVIEWZOOM_H
+#define KGD_GRAPHICSVIEWZOOM_H
 
 #include <QGraphicsView>
 
@@ -57,4 +57,4 @@ signals:
 
   /// \endcond
 };
-#endif // GRAPHICSVIEWZOOM_H
+#endif // KGD_GRAPHICSVIEWZOOM_H

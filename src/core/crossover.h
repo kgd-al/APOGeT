@@ -1,5 +1,5 @@
-#ifndef _CROSSOVER_HPP_
-#define _CROSSOVER_HPP_
+#ifndef KGD_CROSSOVER_HPP
+#define KGD_CROSSOVER_HPP
 
 #include <cmath>
 #include <functional>
@@ -302,4 +302,4 @@ bailOutCrossver(const GENOME &mother, const GENOME &father,
 
 } // end of namespace genotype (again)
 
-#endif // _CROSSOVER_HPP_
+#endif // KGD_CROSSOVER_HPP

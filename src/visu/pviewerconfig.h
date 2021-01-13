@@ -1,5 +1,5 @@
-#ifndef _P_VIEWER_CONFIG_H_
-#define _P_VIEWER_CONFIG_H_
+#ifndef KGD_PT_GRAPH_BUILDER_HPP
+#define KGD_PT_GRAPH_BUILDER_HPP
 
 #include "kgd/settings/configfile.h"
 

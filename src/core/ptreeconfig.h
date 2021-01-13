@@ -1,5 +1,5 @@
-#ifndef _P_TREE_CONFIG_H_
-#define _P_TREE_CONFIG_H_
+#ifndef KGD_P_TREE_CONFIG_H
+#define KGD_P_TREE_CONFIG_H
 
 #include "kgd/settings/configfile.h"
 
@@ -71,4 +71,4 @@ struct CFILE : public ConfigFile<CFILE> {
 
 } // end of namespace config
 
-#endif // _P_TREE_CONFIG_H_
+#endif // KGD_P_TREE_CONFIG_H

@@ -1,5 +1,5 @@
-#ifndef ENUM_VECTOR_HPP
-#define ENUM_VECTOR_HPP
+#ifndef KGD_ENUM_VECTOR_HPP
+#define KGD_ENUM_VECTOR_HPP
 
 /*!
  * \file enumvector.hpp
@@ -96,4 +96,4 @@ public:
 
 } // end namespace phylogeny
 
-#endif // ENUM_VECTOR_HPP
+#endif // KGD_ENUM_VECTOR_HPP

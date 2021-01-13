@@ -1,5 +1,5 @@
-#ifndef CALLBACKS_HPP
-#define CALLBACKS_HPP
+#ifndef KGD_CALLBACKS_HPP
+#define KGD_CALLBACKS_HPP
 
 /*!
  * \file callbacks.hpp
@@ -46,4 +46,4 @@ struct Callbacks_t {
 
 } // end of namespace phylogeny
 
-#endif // CALLBACKS_HPP
+#endif // KGD_CALLBACKS_HPP

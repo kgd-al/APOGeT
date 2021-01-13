@@ -1,5 +1,5 @@
-#ifndef LAYER_HPP
-#define LAYER_HPP
+#ifndef KGD_APOGET_LAYER_HPP
+#define KGD_APOGET_LAYER_HPP
 
 /*!
  * \file layer.hpp
@@ -89,4 +89,4 @@ struct Layer : public QGraphicsItem {
 
 Q_DECLARE_METATYPE(gui::Layer*)
 
-#endif // LAYER_HPP
+#endif // KGD_APOGET_LAYER_HPP

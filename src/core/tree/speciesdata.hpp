@@ -1,5 +1,5 @@
-#ifndef SPECIESDATA_HPP
-#define SPECIESDATA_HPP
+#ifndef KGD_SPECIES_DATA_HPP
+#define KGD_SPECIES_DATA_HPP
 
 /*!
  * \file speciesdata.hpp
@@ -59,4 +59,4 @@ struct SpeciesData {
 
 } // end of namespace phylogeny
 
-#endif // SPECIESDATA_HPP
+#endif // KGD_SPECIES_DATA_HPP

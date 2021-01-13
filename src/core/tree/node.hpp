@@ -1,5 +1,5 @@
-#ifndef NODE_HPP
-#define NODE_HPP
+#ifndef KGD_APOGET_NODE_HPP
+#define KGD_APOGET_NODE_HPP
 
 /*!
  * \file node.hpp
@@ -243,4 +243,4 @@ private:
 
 } // end of namespace phylogeny
 
-#endif // NODE_HPP
+#endif // KGD_APOGET_NODE_HPP

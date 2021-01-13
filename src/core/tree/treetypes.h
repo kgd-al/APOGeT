@@ -1,5 +1,5 @@
-#ifndef _PTREE_TYPES_HPP_
-#define _PTREE_TYPES_HPP_
+#ifndef KGD_PTREE_TYPES_HPP
+#define KGD_PTREE_TYPES_HPP
 
 /*!
  * \file treetypes.h
@@ -276,4 +276,4 @@ EnveloppeContribution computeContribution(const DistanceMap &edist,
 
 } // end of namespace phylogeny
 
-#endif // _PTREE_TYPES_HPP_
+#endif // KGD_PTREE_TYPES_HPP

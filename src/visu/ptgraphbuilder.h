@@ -1,5 +1,5 @@
-#ifndef _PT_GRAPH_BUILDER_HPP_
-#define _PT_GRAPH_BUILDER_HPP_
+#ifndef KGD_PT_GRAPH_BUILDER_HPP
+#define KGD_PT_GRAPH_BUILDER_HPP
 
 /*!
  * \file ptgraphbuilder.h
@@ -663,4 +663,4 @@ private:
 
 } // end of namespace gui
 
-#endif // _PT_GRAPH_BUILDER_HPP_
+#endif // KGD_PT_GRAPH_BUILDER_HPP
