@@ -1,5 +1,5 @@
-#ifndef KGD_PT_GRAPH_BUILDER_HPP
-#define KGD_PT_GRAPH_BUILDER_HPP
+#ifndef KGD_PVIEWVER_CONFIG_H
+#define KGD_PVIEWVER_CONFIG_H
 
 #include "kgd/settings/configfile.h"
 
@@ -39,4 +39,4 @@ struct CFILE : public ConfigFile<CFILE> {
 
 } // end of namespace config
 
-#endif // _P_TREE_CONFIG_H_
+#endif // KGD_PVIEWVER_CONFIG_H
