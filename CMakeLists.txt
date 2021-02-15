@@ -146,7 +146,7 @@ if (NOT CLUSTER_BUILD)
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
     set(MAYBE_GUI "apt-gui")
-    set(GUI_LIB "${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui> ${QT_LIBS}")
+    set(GUI_LIBS "${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui> ${QT_LIBS}")
 
     option(BUILD_GENERIC_VIEWER "Whether or not to build the generic viewer" ON)
     message("Building generic viewer " ${BUILD_GENERIC_VIEWER})
@@ -195,13 +195,13 @@ message("Build tests " ${BUILD_TESTS})
 option(NO_PRINTER "Sets whether to disable QPrinter related capabilities" OFF)
 message("No printer " ${NO_PRINTER})
 if (NO_PRINTER)
-    add_definitions(-NO_PRINTER)
+    list(APPEND KGD_DEFINITIONS -DNO_PRINTER)
 endif()
 
 option(NO_SVG "Sets whether to disable SVG related capabilities" OFF)
 message("No printer " ${NO_SVG})
 if (NO_SVG)
-    add_definitions(-NO_SVG)
+    list(APPEND KGD_DEFINITIONS -DNO_SVG)
 endif()
 
 ################################################################################
@@ -300,9 +300,10 @@ set(${PROJECT_NAME}_LIBRARIES
     >)
 
 if(NOT CLUSTER_BUILD)
-    set(${PROJECT_NAME}_GUI_LIBRARIES $<JOIN:${GUI_LIB},
+    set(${PROJECT_NAME}_GUI_LIBRARIES $<JOIN:${GUI_LIBS},
         >)
 
+    set(QT_COMPONENTS ${QT_COMPONENTS})
     find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
     message(\"Qt found at \" ${Qt5_DIR})
     set(QT_LIBS ${QT_LIBS})
