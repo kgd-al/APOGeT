@@ -6,6 +6,9 @@ cmake_minimum_required(VERSION 3.4)
 
 
 project("APOGeT")
+message("\n####################################################################"
+    "############\n## CMakeFile for ${PROJECT_NAME}")
+
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic")#"-ftime-report")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -145,8 +148,6 @@ if (NOT CLUSTER_BUILD)
     target_link_libraries(apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
-    set(MAYBE_GUI "apt-gui")
-    set(GUI_LIBS "${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui> ${QT_LIBS}")
 
     option(BUILD_GENERIC_VIEWER "Whether or not to build the generic viewer" ON)
     message("Building generic viewer " ${BUILD_GENERIC_VIEWER})
@@ -155,7 +156,8 @@ if (NOT CLUSTER_BUILD)
             apt-basicviewer
             src/tests/basicviewer.cpp
         )
-        target_link_libraries(apt-basicviewer apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
+        target_link_libraries(apt-basicviewer apt-gui apt-core
+                              ${tools_LIBRARIES} ${QT_LIBS})
         set_property(TARGET apt-basicviewer PROPERTY POSITION_INDEPENDENT_CODE ON)
     endif()
 
@@ -199,7 +201,7 @@ if (NO_PRINTER)
 endif()
 
 option(NO_SVG "Sets whether to disable SVG related capabilities" OFF)
-message("No printer " ${NO_SVG})
+message("No svg " ${NO_SVG})
 if (NO_SVG)
     list(APPEND KGD_DEFINITIONS -DNO_SVG)
 endif()
@@ -296,17 +298,19 @@ set(${PROJECT_NAME}_INCLUDE_DIRS
     ${CMAKE_INSTALL_PREFIX}/include)
 
 set(${PROJECT_NAME}_LIBRARIES
-    $<JOIN:${tools_LIBRARIES};${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>,
+    $<JOIN:${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>;${tools_LIBRARIES},
     >)
 
 if(NOT CLUSTER_BUILD)
-    set(${PROJECT_NAME}_GUI_LIBRARIES $<JOIN:${GUI_LIBS},
-        >)
 
     set(QT_COMPONENTS ${QT_COMPONENTS})
     find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
     message(\"Qt found at \" ${Qt5_DIR})
     set(QT_LIBS ${QT_LIBS})
+
+    set(${PROJECT_NAME}_GUI_LIBRARIES
+        $<JOIN:${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui>;${QT_LIBS},
+        >)
 endif()
 
 set(${PROJECT_NAME}_KGD_DEFINITIONS ${KGD_DEFINITIONS})
