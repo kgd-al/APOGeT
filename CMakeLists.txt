@@ -25,7 +25,7 @@ if (${CMAKE_INSTALL_PREFIX} MATCHES "^$ENV{HOME}")
     string(APPEND CMAKE_INSTALL_PREFIX "/${BUILD_TYPE}")
     set(CMAKE_PREFIX_PATH ${CMAKE_INSTALL_PREFIX})
 endif()
-set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd/apt")
+set(LIB_BASE "${CMAKE_INSTALL_PREFIX}/lib/kgd")
 message("Install path is ${CMAKE_INSTALL_PREFIX}/")
 
 
@@ -33,9 +33,15 @@ message("Install path is ${CMAKE_INSTALL_PREFIX}/")
 ## Self dependancies
 ################################################################################
 
-find_package(tools CONFIG REQUIRED)
-include_directories(${tools_INCLUDE_DIRS})
-list(APPEND KGD_DEFINITIONS ${tools_KGD_DEFINITIONS})
+find_package(Tools CONFIG REQUIRED)
+include_directories(${Tools_INCLUDE_DIRS})
+message("> Tools found at " ${Tools_DIR})
+list(APPEND CORE_LIBS ${Tools_LIBRARIES})
+message("  > Core libraries: " "${CORE_LIBS}")
+list(APPEND GUI_LIBS ${Tools_GUI_LIBRARIES})
+message("  > Gui libraries: " "${GUI_LIBS}")
+
+list(APPEND KGD_DEFINITIONS ${Tools_KGD_DEFINITIONS})
 
 
 ####################################################################################################
@@ -89,9 +95,8 @@ set(TREE_SRC
 PREPEND(TREE_SRC "src/core/tree" ${TREE_SRC})
 
 add_library(apt-core STATIC ${CORE_SRC} ${TREE_SRC})
-target_link_libraries(apt-core ${tools_LIBRARIES})
-
-message("${CORE_SRC}")
+target_link_libraries(apt-core ${CORE_LIBS})
+list(APPEND NEW_CORE_LIBS ${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>)
 
 ################################################################################
 ## GUI management
@@ -120,6 +125,7 @@ if (NOT CLUSTER_BUILD)
 
     find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
     message("Qt found at " ${Qt5_DIR})
+    list(APPEND GUI_LIBS ${QT_LIBS})
 
 
     ############################################################################
@@ -145,9 +151,10 @@ if (NOT CLUSTER_BUILD)
     )
     PREPEND(VISU_SRC "src/visu" ${VISU_SRC})
     add_library(apt-gui STATIC ${VISU_SRC})
-    target_link_libraries(apt-gui apt-core ${tools_LIBRARIES} ${QT_LIBS})
+    target_link_libraries(apt-gui apt-core ${CORE_LIBS} ${GUI_LIBS} ${QT_LIBS})
     set_target_properties(apt-gui PROPERTIES AUTOMOC ON)
     set_property(TARGET apt-gui PROPERTY POSITION_INDEPENDENT_CODE ON)
+    list(APPEND NEW_GUI_LIBS ${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui>)
 
     option(BUILD_GENERIC_VIEWER "Whether or not to build the generic viewer" ON)
     message("Building generic viewer " ${BUILD_GENERIC_VIEWER})
@@ -157,7 +164,7 @@ if (NOT CLUSTER_BUILD)
             src/tests/basicviewer.cpp
         )
         target_link_libraries(apt-basicviewer apt-gui apt-core
-                              ${tools_LIBRARIES} ${QT_LIBS})
+                              ${CORE_LIBS} ${GUI_LIBS} ${QT_LIBS})
         set_property(TARGET apt-basicviewer PROPERTY POSITION_INDEPENDENT_CODE ON)
     endif()
 
@@ -167,10 +174,8 @@ endif()
 ## Options
 ################################################################################
 
-
-message("")
-
-option(CLUSTER_BUILD "Whether or not building on a cluster (i-e no gui and local linkage)" ON)
+option(CLUSTER_BUILD
+       "Whether or not building on a cluster (i-e no gui and local linkage)" ON)
 message("Cluster building mode is " ${CLUSTER_BUILD})
 if(CLUSTER_BUILD)
     add_definitions(-DCLUSTER_BUILD)
@@ -220,7 +225,7 @@ if (GENERATE_HELP)
     set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/docs")
 
     # Doxygen needs to see the included files as well (e.g. macros)
-    set(DOXYGEN_INCLUDE_PATH "${tools_INCLUDE_DIRS}")
+    set(DOXYGEN_INCLUDE_PATH "${Tools_INCLUDE_DIRS}")
 
     # Do expand macros for I may have used some...
     set(DOXYGEN_MACRO_EXPANSION YES)
@@ -256,9 +261,9 @@ endif()
 ## Package info generation / installation
 ################################################################################
 
-install(TARGETS apt-core ARCHIVE DESTINATION lib/kgd/apt)
+install(TARGETS apt-core ARCHIVE DESTINATION lib/kgd)
 if (NOT CLUSTER_BUILD)
-    install(TARGETS apt-gui ARCHIVE DESTINATION lib/kgd/apt)
+    install(TARGETS apt-gui ARCHIVE DESTINATION lib/kgd)
 endif()
 
 if (BUILD_GENERIC_VIEWER AND NOT CLUSTER_BUILD)
@@ -294,36 +299,42 @@ file(GENERATE
 "# CMake configuration settings for project ${PROJECT_NAME} (${CMAKE_BUILD_TYPE})
 
 set(${PROJECT_NAME}_INCLUDE_DIRS
-    ${tools_INCLUDE_DIRS}
     ${CMAKE_INSTALL_PREFIX}/include)
 
 set(${PROJECT_NAME}_LIBRARIES
-    $<JOIN:${LIB_BASE}/$<TARGET_FILE_NAME:apt-core>;${tools_LIBRARIES},
+    $<JOIN:${NEW_CORE_LIBS};${CORE_LIBS},
     >)
 
-if(NOT CLUSTER_BUILD)
+$<$<NOT:$<BOOL:${CLUSTER_BUILD}>>:
+set(QT_COMPONENTS ${QT_COMPONENTS})
+find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
+message(\"Qt found at \" ${Qt5_DIR})
 
-    set(QT_COMPONENTS ${QT_COMPONENTS})
-    find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
-    message(\"Qt found at \" ${Qt5_DIR})
-    set(QT_LIBS ${QT_LIBS})
-
-    set(${PROJECT_NAME}_GUI_LIBRARIES
-        $<JOIN:${LIB_BASE}/$<TARGET_FILE_NAME:apt-gui>;${QT_LIBS},
-        >)
-endif()
+set(${PROJECT_NAME}_GUI_LIBRARIES
+    $<JOIN:${NEW_GUI_LIBS};${GUI_LIBS},
+    >)
+>
 
 set(${PROJECT_NAME}_KGD_DEFINITIONS ${KGD_DEFINITIONS})
+set(DEPENDENCY_GENERATOR
+    ${CMAKE_INSTALL_PREFIX}/cmake/generate_dependency_data.sh)
 
 set(${PROJECT_NAME}_BUILD_TYPE ${CMAKE_BUILD_TYPE})
 if(NOT \${${PROJECT_NAME}_BUILD_TYPE} STREQUAL \${CMAKE_BUILD_TYPE})
     message(FATAL_ERROR \"Mismatching build version!
-        Linking against '\${${PROJECT_NAME}_BUILD_TYPE}' while using '\${CMAKE_BUILD_TYPE}'\")
-endif()\n"
-)
+        Linking against '\${${PROJECT_NAME}_BUILD_TYPE}' while using
+        '\${CMAKE_BUILD_TYPE}'\")
+endif()
+
+set(${PROJECT_NAME}_CLUSTER_BUILD ${CLUSTER_BUILD})
+if (NOT \${${PROJECT_NAME}_CLUSTER_BUILD} STREQUAL \${CLUSTER_BUILD})
+    message(FATAL_ERROR \"Mismatching cluster build values!
+        Linking against '\${${PROJECT_NAME}_CLUSTER_BUILD}' while using
+        '\${CLUSTER_BUILD}'\")
+endif()
+")
 install(FILES ${CONFIG} DESTINATION cmake)
 
-set(DEPENDENCY_GENERATOR ${tools_DIR}/generate_dependency_data.sh)
 set(DEPENDENCY_FILE "${CMAKE_CURRENT_BINARY_DIR}/apt.dependency")
 add_custom_target(dependencies ALL DEPENDS ${DEPENDENCY_FILE})
 add_custom_command(
