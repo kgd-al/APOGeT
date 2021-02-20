@@ -327,10 +327,10 @@ if(NOT \${${PROJECT_NAME}_BUILD_TYPE} STREQUAL \${CMAKE_BUILD_TYPE})
 endif()
 
 set(${PROJECT_NAME}_CLUSTER_BUILD ${CLUSTER_BUILD})
-if (NOT \${${PROJECT_NAME}_CLUSTER_BUILD} STREQUAL \${CLUSTER_BUILD})
+if (\${${PROJECT_NAME}_CLUSTER_BUILD} STREQUAL ON
+    AND \${CLUSTER_BUILD} STREQUAL OFF)
     message(FATAL_ERROR \"Mismatching cluster build values!
-        Linking against '\${${PROJECT_NAME}_CLUSTER_BUILD}' while using
-        '\${CLUSTER_BUILD}'\")
+        ${PROJECT_NAME} was built in cluster mode\")
 endif()
 ")
 install(FILES ${CONFIG} DESTINATION cmake)
