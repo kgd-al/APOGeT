@@ -306,9 +306,10 @@ set(${PROJECT_NAME}_LIBRARIES
     >)
 
 $<$<NOT:$<BOOL:${CLUSTER_BUILD}>>:
+set(Qt5_DIR ${Qt5_DIR})
 set(QT_COMPONENTS ${QT_COMPONENTS})
 find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
-message(\"Qt found at \" ${Qt5_DIR})
+message(\"Qt found at \" \${Qt5_DIR})
 
 set(${PROJECT_NAME}_GUI_LIBRARIES
     $<JOIN:${NEW_GUI_LIBS};${GUI_LIBS},
