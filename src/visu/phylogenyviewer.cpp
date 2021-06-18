@@ -86,7 +86,7 @@ public:
 
       QStyleOptionFocusRect option;
       option.initFrom(this);
-      option.backgroundColor = palette().color(QPalette::Background);
+      option.backgroundColor = palette().color(QPalette::Window);
 
       painter.translate(0,sizeHint().height());
       painter.rotate(270);
@@ -712,8 +712,8 @@ void PhylogenyViewer_base::renderToPDF(const QString &filename) const {
     printSize = printSize * _config.rasterRadius / printSize.width();
 
   QPrinter printer(QPrinter::HighResolution);
-  printer.setPageSizeMM(printSize);
-  printer.setOrientation(QPrinter::Portrait);
+  printer.setPageSize(QPageSize(printSize, QPageSize::Millimeter));
+  printer.setPageOrientation(QPageLayout::Portrait);
   printer.setOutputFormat(QPrinter::PdfFormat);
   printer.setOutputFileName(filename);
 
