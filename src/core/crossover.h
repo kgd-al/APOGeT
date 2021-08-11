@@ -169,7 +169,7 @@ struct MutationSettings::BoundsOperators<genotype::BOCData::Sex, void> {
   }
 
   /// \returns flip the sex
-  static void mutate (Sex &s, const Sex&, const Sex&, Dice&) {
+  static void mutate (Sex &s, const Sex&, const Sex&, float, Dice&) {
     s = (s == Sex::MALE) ? Sex::FEMALE : Sex::MALE;
   }
 
