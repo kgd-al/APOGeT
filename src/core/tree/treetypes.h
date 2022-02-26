@@ -50,7 +50,7 @@ public:
   /// Generate next id value
   GID operator() (void) {
     if (next == std::numeric_limits<GID_ut>::max())
-      utils::doThrow<std::out_of_range>(
+      utils::Thrower<std::out_of_range>(
         "Exhausted all possible identifers for the underlying type ",
         utils::className<GID_ut>());
     return GID(next++);

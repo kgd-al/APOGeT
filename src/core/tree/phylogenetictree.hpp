@@ -167,11 +167,11 @@ public:
   /// \return the node with \p sid
   const auto& nodeAt (SID i) const {
     if (i == SID::INVALID)
-      throw std::invalid_argument("SID::INVALID is (by definition) invalid");
+      utils::Thrower("SID::INVALID is (by definition) invalid");
 
     auto it = _nodes.find(i);
     if (it == _nodes.end())
-      utils::doThrow<std::invalid_argument>("No node found for species ", i);
+      utils::Thrower("No node found for species ", i);
 
     return it->second;
   }
@@ -948,7 +948,7 @@ public:
     pt._stillborns = j["_stillborns"];
     pt._rsetSize = j["_envSize"];
     if (Config::rsetSize() != pt._rsetSize)
-      utils::doThrow<std::invalid_argument>(
+      utils::Thrower(
         "Current configuration file specifies an enveloppe size of ",
         Config::rsetSize(), " whereas the provided PTree was built with ",
         pt._rsetSize);
